@@ -10,7 +10,7 @@
     "dev:client": "npm --prefix client run dev",
     "dev": "concurrently -n SERVER,CLIENT -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "build": "npm --prefix client run build",
-    "typecheck": "npm --prefix server run typecheck && npm --prefix client exec tsc -b --noEmit"
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
