@@ -12,8 +12,10 @@ import {
   BarChart3,
   LogOut,
   Menu,
+  LineChart,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useRealtime } from '../context/RealtimeContext';
 import { api } from '../api/client';
 import { humanize } from '../utils';
 
@@ -32,12 +34,14 @@ const NAV: NavItem[] = [
   { to: '/documents', label: 'Documents & Leases', icon: <FileWarning size={18} /> },
   { to: '/alerts', label: 'Alerts & Escalation', icon: <Bell size={18} /> },
   { to: '/reports', label: 'Reports', icon: <BarChart3 size={18} />, roles: ['BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN', 'REGIONAL_OFFICER'] },
+  { to: '/simulation', label: 'Simulation', icon: <LineChart size={18} />, roles: ['BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN'] },
   { to: '/audit', label: 'Audit Trail', icon: <ScrollText size={18} />, roles: ['BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN'] },
   { to: '/rules', label: 'Rules Configuration', icon: <Settings2 size={18} />, roles: ['ADMIN', 'COMPETENT_AUTHORITY'] },
 ];
 
 export function Layout() {
   const { user, logout } = useAuth();
+  const { connected } = useRealtime();
   const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -47,6 +51,9 @@ export function Layout() {
       .get('/alerts', { params: { isRead: 'false' } })
       .then((res) => setUnread(res.data.data.length))
       .catch(() => {});
+    const onAlert = () => setUnread((n) => n + 1);
+    window.addEventListener('aicte:alert', onAlert);
+    return () => window.removeEventListener('aicte:alert', onAlert);
   }, []);
 
   if (!user) return null;
@@ -107,6 +114,13 @@ export function Layout() {
             Integrated Approval Workflow, Compliance Monitoring &amp; Alert Management
           </div>
           <div className="flex items-center gap-4">
+            <span
+              title={connected ? 'Real-time connected' : 'Real-time disconnected'}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-500"
+            >
+              <span className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-slate-300'}`} />
+              {connected ? 'Live' : 'Offline'}
+            </span>
             <div className="text-right">
               <p className="text-sm font-semibold text-slate-800">{user.fullName}</p>
               <p className="text-xs text-slate-500">

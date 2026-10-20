@@ -32,3 +32,13 @@ export function apiError(error: unknown): string {
   }
   return 'Something went wrong';
 }
+
+/** Uploads a single file and returns its server-relative URL. */
+export async function uploadFile(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await api.post('/uploads', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data.data.url as string;
+}

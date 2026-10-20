@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ShieldCheck, Plus } from 'lucide-react';
-import { api, apiError } from '../api/client';
+import { RefreshCw, ShieldCheck, Plus, Upload, Paperclip } from 'lucide-react';
+import { api, apiError, uploadFile } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
@@ -68,7 +68,19 @@ export function DocumentsPage() {
                 const days = d.daysToExpiry ?? daysUntil(d.validUntil);
                 return (
                   <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-slate-800">{d.title}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {d.title}
+                      {d.filePath && (
+                        <a
+                          href={d.filePath}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          <Paperclip size={12} /> View
+                        </a>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{humanize(d.type)}</td>
                     <td className="px-4 py-3 text-slate-600">{d.institution?.name}</td>
                     <td className="px-4 py-3">
@@ -112,12 +124,28 @@ export function DocumentsPage() {
 function RenewModal({ doc, onClose, onSaved }: { doc: DocumentRecord; onClose: () => void; onSaved: () => void }) {
   const { push } = useToast();
   const [renewedUntil, setRenewedUntil] = useState('');
+  const [filePath, setFilePath] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const handleFile = async (file?: File) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      setFilePath(await uploadFile(file));
+      push('File uploaded');
+    } catch (err) {
+      push(apiError(err), 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post(`/documents/${doc.id}/renewal`, { renewedUntil });
+      await api.post(`/documents/${doc.id}/renewal`, { renewedUntil, filePath: filePath || undefined });
       onSaved();
     } catch (err) {
       push(apiError(err), 'error');
@@ -131,9 +159,16 @@ function RenewModal({ doc, onClose, onSaved }: { doc: DocumentRecord; onClose: (
         <Field label="New Validity Until">
           <input type="date" value={renewedUntil} onChange={(e) => setRenewedUntil(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </Field>
+        <Field label="Renewed Document (PDF/image)">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
+            <Upload size={14} />
+            {uploading ? 'Uploading…' : filePath ? 'File attached' : 'Choose file'}
+            <input type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+          </label>
+        </Field>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Submitting…' : 'Submit Renewal'}</button>
+          <button type="submit" disabled={saving || uploading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Submitting…' : 'Submit Renewal'}</button>
         </div>
       </form>
     </Modal>
@@ -183,12 +218,29 @@ function NewDocumentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [type, setType] = useState('LEASE_DEED');
   const [title, setTitle] = useState('');
   const [validUntil, setValidUntil] = useState('');
+  const [filePath, setFilePath] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const handleFile = async (file?: File) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      setFilePath(url);
+      push('File uploaded');
+    } catch (err) {
+      push(apiError(err), 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post('/documents', { type, title, validUntil, filePath: '' });
+      await api.post('/documents', { type, title, validUntil, filePath });
       onSaved();
     } catch (err) {
       push(apiError(err), 'error');
@@ -212,9 +264,16 @@ function NewDocumentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         <Field label="Valid Until">
           <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </Field>
+        <Field label="Attachment (PDF/image)">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
+            <Upload size={14} />
+            {uploading ? 'Uploading…' : filePath ? 'File attached' : 'Choose file'}
+            <input type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+          </label>
+        </Field>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
+          <button type="submit" disabled={saving || uploading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </Modal>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert, History, FileDown } from 'lucide-react';
-import jsPDF from 'jspdf';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -80,7 +79,8 @@ export function ApplicationDetailPage() {
     }
   };
 
-  const downloadCaseFile = () => {
+  const downloadCaseFile = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     let y = 20;
     doc.setFontSize(16);
