@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { AnyZodObject, ZodEffects, ZodError } from 'zod';
-import { fail } from '../utils/response';
 
 type Schema = AnyZodObject | ZodEffects<AnyZodObject>;
 
@@ -18,12 +17,12 @@ export const validate =
       next();
     } catch (err) {
       if (err instanceof ZodError) {
-        return fail(
-          res,
-          422,
-          'Validation failed',
-          err.issues.map((i) => ({ path: i.path.join('.'), message: i.message }))
-        );
+        return res.status(422).json({
+          success: false,
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          errors: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        });
       }
       next(err);
     }
