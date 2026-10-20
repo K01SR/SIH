@@ -37,25 +37,31 @@ export async function scheduleEvc(req: Request, res: Response) {
 
   const proposed = new Date(scheduledDate);
 
-  // Conflict detection: members already booked on the same day.
+  // Conflict detection: members already booked on the same calendar day.
+  // Use UTC day boundaries so results are timezone-independent.
+  const dayStart = new Date(proposed);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(proposed);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
   const candidates = (memberIds as string[]) ?? [];
   const conflicts: string[] = [];
-  for (const memberId of candidates) {
-    const clash = await prisma.evcMember.findFirst({
+  if (candidates.length) {
+    const sameDayEvcs = await prisma.evcSchedule.findMany({
       where: {
-        userId: memberId,
-        evcScheduleId: { not: evc.id },
-        evcSchedule: {
-          scheduledDate: {
-            gte: new Date(proposed.setHours(0, 0, 0, 0)),
-            lt: new Date(proposed.setHours(23, 59, 59, 999)),
-          },
-          status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
-        },
+        id: { not: evc.id },
+        scheduledDate: { gte: dayStart, lte: dayEnd },
+        status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
       },
-      include: { user: true },
+      include: { members: { include: { user: true } } },
     });
-    if (clash) conflicts.push(clash.user.fullName);
+    for (const memberId of candidates) {
+      const clash = sameDayEvcs.find((s) => s.members.some((m) => m.userId === memberId));
+      if (clash) {
+        const name = clash.members.find((m) => m.userId === memberId)?.user.fullName ?? 'Member';
+        conflicts.push(name);
+      }
+    }
   }
   if (conflicts.length) {
     return fail(res, 409, `Scheduling conflict for: ${conflicts.join(', ')}`, { conflicts });

@@ -8,6 +8,8 @@ import rulesRoutes from './rules.routes';
 import alertRoutes from './alert.routes';
 import auditRoutes from './audit.routes';
 import reportRoutes from './report.routes';
+import institutionRoutes from './institution.routes';
+import userRoutes from './user.routes';
 
 const router = Router();
 
@@ -21,5 +23,7 @@ router.use('/rules', rulesRoutes);
 router.use('/alerts', alertRoutes);
 router.use('/audit', auditRoutes);
 router.use('/reports', reportRoutes);
+router.use('/institutions', institutionRoutes);
+router.use('/users', userRoutes);
 
 export default router;

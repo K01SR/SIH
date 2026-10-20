@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { humanize, STATUS_COLORS } from '../utils';
 
 export function Badge({ value, className = '' }: { value?: string | null; className?: string }) {

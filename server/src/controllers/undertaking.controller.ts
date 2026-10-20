@@ -19,7 +19,13 @@ export async function createUndertaking(req: Request, res: Response) {
   const app = await prisma.application.findUnique({ where: { id: applicationId } });
   if (!app) return fail(res, 404, 'Application not found');
   const u = await prisma.undertaking.create({
-    data: { applicationId, title, description, conditions: conditions ?? {}, dueDate: new Date(dueDate) },
+    data: {
+      applicationId,
+      title,
+      description,
+      conditions: conditions ? (typeof conditions === 'string' ? conditions : JSON.stringify(conditions)) : '{}',
+      dueDate: new Date(dueDate),
+    },
   });
   await prisma.application.update({ where: { id: applicationId }, data: { status: 'APPROVED_WITH_UNDERTAKING' } });
   await notify({
