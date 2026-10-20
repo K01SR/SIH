@@ -1,12 +1,18 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { env } from './config/env';
 import routes from './routes';
 import { notFound, errorHandler } from './middleware/error';
+import { requestLogger } from './middleware/requestLogger';
+import { apiLimiter } from './middleware/rateLimit';
 import { startEscalationScheduler } from './scheduler';
 import { setRealtimeEmitter } from './services/notification.service';
+import { prisma } from './config/prisma';
+import { uploadRoot } from './middleware/upload';
 
 const app = express();
 const server = http.createServer(app);
@@ -14,27 +20,54 @@ const io = new SocketServer(server, {
   cors: { origin: env.clientUrl, credentials: true },
 });
 
+app.set('trust proxy', 1);
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(compression());
 app.use(cors({ origin: env.clientUrl, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 app.set('io', io);
-
 setRealtimeEmitter(io);
 
-app.use('/api', routes);
+// Attach authenticated socket rooms so users only receive relevant events.
+io.use((socket, next) => {
+  const userId = socket.handshake.auth?.userId as string | undefined;
+  if (userId) socket.data.userId = userId;
+  next();
+});
+
+app.use('/api', apiLimiter, routes);
+
+// Serve uploaded documents statically for download/preview.
+app.use('/uploads', express.static(uploadRoot, { maxAge: '1h', index: false }));
 
 app.use(notFound);
 app.use(errorHandler);
 
 io.on('connection', (socket) => {
-  console.log(`[socket] client connected: ${socket.id}`);
-  socket.on('disconnect', () => console.log(`[socket] client disconnected: ${socket.id}`));
+  const userId = socket.data.userId as string | undefined;
+  if (userId) socket.join(`user:${userId}`);
+  console.log(`[socket] connected: ${socket.id}${userId ? ` (user ${userId})` : ''}`);
+  socket.on('disconnect', () => console.log(`[socket] disconnected: ${socket.id}`));
 });
 
-server.listen(env.port, () => {
-  console.log(`[server] AICTE Workflow API listening on http://localhost:${env.port}`);
-  startEscalationScheduler();
-});
+export async function start() {
+  try {
+    await prisma.$connect();
+  } catch (err) {
+    console.error('[server] database connection failed', err);
+  }
+  return server.listen(env.port, () => {
+    console.log(`[server] AICTE Workflow API listening on http://localhost:${env.port} (${env.nodeEnv})`);
+    if (env.enableScheduler) startEscalationScheduler();
+  });
+}
+
+// Auto-start only when executed as the entrypoint (not when imported by tests).
+if (require.main === module) {
+  void start();
+}
 
 export { app, server, io };

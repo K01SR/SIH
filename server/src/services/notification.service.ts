@@ -18,16 +18,29 @@ interface NotifyParams {
 }
 
 /**
+ * Channel adapters. IN_APP writes a persisted notification (broadcast over
+ * Socket.IO). EMAIL/SMS use a logging adapter suitable for the prototype;
+ * swap the adapter body for a real provider integration without touching
+ * callers — the NotificationChannel contract is unchanged.
+ */
+const channelAdapters: Record<string, (params: NotifyParams) => Promise<void>> = {
+  IN_APP: async () => {},
+  EMAIL: async (params) => {
+    console.log(`[email-adapter] to=${params.userId ?? 'broadcast'} subject="${params.subject}"`);
+  },
+  SMS: async (params) => {
+    console.log(`[sms-adapter] to=${params.userId ?? 'broadcast'} body="${params.body}"`);
+  },
+};
+
+/**
  * Channel-abstracted notification dispatcher.
- * IN_APP entries persist to the database. EMAIL/SMS use a console adapter
- * for the prototype and can be swapped for real providers later.
  */
 export async function notify(params: NotifyParams) {
   const channel = params.channel ?? NotificationChannel.IN_APP;
 
-  if (channel !== NotificationChannel.IN_APP) {
-    console.log(`[notification:${channel}] to=${params.userId} subject="${params.subject}"`);
-  }
+  const adapter = channelAdapters[channel] ?? channelAdapters.IN_APP;
+  await adapter(params);
 
   const record = await prisma.notification.create({
     data: {
@@ -44,6 +57,44 @@ export async function notify(params: NotifyParams) {
 
   emitter?.emit('notification', record);
   return record;
+}
+
+/**
+ * Bulk notification dispatcher. Resolves recipients from a role and/or an
+ * explicit list of user ids, then dispatches on the requested channel.
+ */
+export async function notifyBulk(params: {
+  userIds?: string[];
+  roles?: string[];
+  subject: string;
+  body: string;
+  channel?: NotificationChannel;
+  metadata?: unknown;
+}) {
+  const recipients = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        params.userIds?.length ? { id: { in: params.userIds } } : undefined,
+        params.roles?.length ? { role: { in: params.roles } } : undefined,
+      ].filter(Boolean) as object[],
+    },
+    select: { id: true },
+  });
+
+  const results = [];
+  for (const r of recipients) {
+    results.push(
+      await notify({
+        userId: r.id,
+        subject: params.subject,
+        body: params.body,
+        channel: params.channel,
+        metadata: params.metadata,
+      })
+    );
+  }
+  return { recipientCount: recipients.length, notifications: results.length };
 }
 
 export async function createAlert(params: {

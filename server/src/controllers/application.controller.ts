@@ -156,6 +156,69 @@ export async function predictive(req: Request, res: Response) {
   return ok(res, await ApplicationService.predictivePendency(days));
 }
 
+export async function assignOfficer(req: Request, res: Response) {
+  const { officerId } = req.body;
+  const app = await prisma.application.findUnique({ where: { id: req.params.id } });
+  if (!app) return fail(res, 404, 'Application not found');
+  let officer = null;
+  if (officerId) {
+    officer = await prisma.user.findUnique({ where: { id: officerId } });
+    if (!officer) return fail(res, 404, 'Officer not found');
+  }
+  const updated = await prisma.application.update({
+    where: { id: app.id },
+    data: { assignedOfficerId: officerId ?? null },
+    include: { assignedOfficer: { select: { id: true, fullName: true, role: true } } },
+  });
+  await recordAudit({
+    userId: req.user!.id,
+    userRole: req.user!.role,
+    action: 'OFFICER_ASSIGNED',
+    entityType: 'Application',
+    entityId: app.id,
+    details: { officerId, officerName: officer?.fullName ?? null },
+  });
+  return ok(res, updated, officerId ? `Assigned to ${officer!.fullName}` : 'Assignment cleared');
+}
+
+/**
+ * Simulation mode: project pendency impact of adding N officers to a region.
+ * Deterministic heuristic based on current open caseload and average
+ * processing throughput — supports what-if capacity planning.
+ */
+export async function simulate(req: Request, res: Response) {
+  const region = (req.query.region as string) || undefined;
+  const additionalOfficers = Math.max(0, parseInt((req.query.additionalOfficers as string) ?? '0', 10));
+  const apps = await prisma.application.findMany({
+    where: {
+      assignedRegion: region as never,
+      status: { notIn: ['APPROVED', 'REJECTED', 'WITHDRAWN'] },
+    },
+    select: { assignedOfficerId: true, isBreached: true, currentStage: true },
+  });
+  const openCases = apps.length;
+  const breached = apps.filter((a) => a.isBreached).length;
+  const currentOfficers = new Set(apps.map((a) => a.assignedOfficerId).filter(Boolean)).size || 1;
+  const officersAfter = currentOfficers + additionalOfficers;
+  const perOfficerNow = openCases / currentOfficers;
+  const perOfficerAfter = openCases / officersAfter;
+  const breachRateNow = openCases ? breached / openCases : 0;
+  const projectedBreachRate = Math.max(0, breachRateNow * (perOfficerNow / perOfficerAfter));
+  return ok(res, {
+    region: region ?? 'ALL',
+    openCases,
+    breached,
+    currentOfficers,
+    additionalOfficers,
+    officersAfter,
+    casesPerOfficerNow: Math.round(perOfficerNow * 10) / 10,
+    casesPerOfficerAfter: Math.round(perOfficerAfter * 10) / 10,
+    breachRateNow: Math.round(breachRateNow * 1000) / 10,
+    projectedBreachRate: Math.round(projectedBreachRate * 1000) / 10,
+    projectedReductionPct: breachRateNow ? Math.round((1 - projectedBreachRate / breachRateNow) * 1000) / 10 : 0,
+  });
+}
+
 export async function sendCommunication(req: Request, res: Response) {
   const { subject, body, channel } = req.body;
   const app = await prisma.application.findUnique({ where: { id: req.params.id } });

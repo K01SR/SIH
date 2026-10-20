@@ -121,6 +121,31 @@ export async function completeEvc(req: Request, res: Response) {
   return ok(res, evc, 'EVC completed');
 }
 
+export async function evcCalendar(req: Request, res: Response) {
+  const from = req.query.from ? new Date(req.query.from as string) : new Date();
+  const to = req.query.to ? new Date(req.query.to as string) : new Date(Date.now() + 30 * DAY_MS);
+  const evcs = await prisma.evcSchedule.findMany({
+    where: { scheduledDate: { gte: from, lte: to }, status: { in: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED'] } },
+    include: {
+      application: { include: { institution: true } },
+      members: { include: { user: { select: { id: true, fullName: true } } } },
+    },
+    orderBy: { scheduledDate: 'asc' },
+  });
+  return ok(
+    res,
+    evcs.map((e) => ({
+      id: e.id,
+      date: e.scheduledDate,
+      venue: e.venue,
+      status: e.status,
+      applicationNumber: e.application.applicationNumber,
+      institution: e.application.institution.name,
+      members: e.members.map((m) => m.user.fullName),
+    }))
+  );
+}
+
 export async function evcAlerts(_req: Request, res: Response) {
   const now = new Date();
   const evcs = await prisma.evcSchedule.findMany({

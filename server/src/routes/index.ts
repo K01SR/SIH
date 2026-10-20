@@ -10,10 +10,33 @@ import auditRoutes from './audit.routes';
 import reportRoutes from './report.routes';
 import institutionRoutes from './institution.routes';
 import userRoutes from './user.routes';
+import uploadRoutes from './upload.routes';
+import { prisma } from '../config/prisma';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
+const startedAt = Date.now();
 
-router.get('/health', (_req, res) => res.json({ status: 'ok', service: 'aicte-workflow' }));
+router.get(
+  '/health',
+  asyncHandler(async (_req, res) => {
+    let db = 'down';
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      db = 'up';
+    } catch {
+      db = 'down';
+    }
+    const healthy = db === 'up';
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'degraded',
+      service: 'aicte-workflow',
+      database: db,
+      uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+      timestamp: new Date().toISOString(),
+    });
+  })
+);
 router.use('/auth', authRoutes);
 router.use('/applications', applicationRoutes);
 router.use('/evc', evcRoutes);
@@ -25,5 +48,6 @@ router.use('/audit', auditRoutes);
 router.use('/reports', reportRoutes);
 router.use('/institutions', institutionRoutes);
 router.use('/users', userRoutes);
+router.use('/uploads', uploadRoutes);
 
 export default router;
