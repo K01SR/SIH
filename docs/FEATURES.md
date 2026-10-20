@@ -53,17 +53,30 @@ Legend: **✅** implemented · **🟡** partially / simplified for prototype
 | # | Requirement | Status | Where |
 |---|---|---|---|
 | 24 | Configurable rules/timelines aligned to APH (rules as data, not code) | ✅ | `RuleConfig` versioned JSON + `RulesPage` |
-| 25 | RBAC + secure document storage + confidentiality + integration-ready API | 🟡 | `authorize` middleware, `Document.filePath` abstraction, REST API layer |
+| 25 | RBAC + secure document storage + confidentiality + integration-ready API | ✅ | `authorize` middleware, multer file storage (`/uploads`), REST API + rate limiting |
 
 ## Evaluation-Criteria Differentiators
 | # | Capability | Status | Where |
 |---|---|---|---|
 | 26 | Metrics panel (workflow accuracy, alert timeliness, pendency visibility, manual-follow-up reduction) | ✅ | `dashboardSummary`, `ReportsPage` |
 | 27 | Configurable rules engine — versioned JSON, editable without redeploy | ✅ | `RulesPage` + `RuleConfig` |
-| 28 | Committee calendar/scheduler for EVC — availability, slot booking, conflict detection | ✅ | `scheduleEvc` (UTC-day conflict detection), `EvcPage` |
+| 28 | Committee calendar/scheduler for EVC — availability, slot booking, conflict detection | ✅ | `scheduleEvc` (UTC-day conflict detection), `/evc/calendar`, `EvcPage` |
 | 29 | Predictive pendency — forecast breaches this month | ✅ | `ApplicationService.predictivePendency`, dashboard panel |
-| 30 | Institution self-service portal | ✅ | Institution role: applications, undertakings, documents |
-| 31 | Bulk notification engine — channel abstraction (console adapter for demo) | ✅ | `notify` (IN_APP / EMAIL / SMS) |
-| 32 | Case-file PDF generation | ✅ | `ApplicationDetailPage` jsPDF export |
-| 33 | Simulation mode ("add officer → projected pendency change") | 🟡 | `workloadDistribution` + predictive analysis provide the basis |
+| 30 | Institution self-service portal | ✅ | Institution role: applications, undertakings, documents, uploads |
+| 31 | Bulk notification engine — channel abstraction (IN_APP/EMAIL/SMS adapters) | ✅ | `notifyBulk` (+ `channelAdapters`), Alerts page modal |
+| 32 | Case-file PDF generation | ✅ | `ApplicationDetailPage` (lazy-loaded jsPDF) |
+| 33 | Simulation mode ("add officer → projected pendency change") | ✅ | `/applications/analytics/simulate`, `SimulationPage` |
 | 34 | Human-oversight gate — propose/confirm, CA confirmation required | ✅ | `WorkflowEngine` HUMAN_OVERSIGHT_ACTIONS, confirmation modal |
+
+## Production & Quality
+| Area | Status | Where |
+|---|---|---|
+| API hardening (helmet, CORS, compression, rate limiting, request logging) | ✅ | `src/index.ts`, `middleware/rateLimit.ts`, `middleware/requestLogger.ts` |
+| Input validation (Zod schemas, structured 422 errors) | ✅ | `middleware/validate.ts`, `validation/schemas.ts` |
+| Centralized typed error handling | ✅ | `utils/AppError.ts`, `middleware/error.ts` |
+| Readiness health check (DB ping, uptime) | ✅ | `GET /api/health` |
+| Real-time alerts over Socket.IO (per-user rooms) | ✅ | `index.ts`, `RealtimeContext`, `RealtimeProvider` |
+| Automated test suite (engines + API integration) | ✅ | `server/tests/*` (vitest + supertest) |
+| Containerization + orchestration | ✅ | `server/Dockerfile`, `client/Dockerfile`, `docker-compose.yml` |
+| CI (typecheck, tests, build on push/PR) | ✅ | `.github/workflows/ci.yml` |
+| Client code-splitting + error boundary | ✅ | `App.tsx` (lazy routes), `components/ErrorBoundary.tsx` |

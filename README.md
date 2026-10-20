@@ -66,8 +66,8 @@ docs/    feature mapping and demo script
 | EVC scheduling | Auto-queueing, calendar scheduling, member availability, **conflict detection**, reminders and delay escalation |
 | Undertakings & compliance | Digital record of conditions/evidence/due dates, online submission, verification, reminders and escalation |
 | Document & lease validity | Expiry tracking with advance alerts (30/15/7 day), renewal submission and verification, overdue escalation |
-| Notifications & reporting | Configurable notification rules, automatic escalation, consolidated reports, complete audit trail |
-| Platform | RBAC (7 roles), secure storage abstraction, confidentiality, integration-ready API layer |
+| Notifications & reporting | Configurable notification rules, automatic escalation, bulk notifications (IN_APP/EMAIL/SMS), consolidated reports, complete audit trail |
+| Platform | RBAC (7 roles), secure uploads, confidentiality, integration-ready API layer, simulation mode for capacity planning |
 
 See `docs/FEATURES.md` for the full feature-to-requirement mapping and
 `docs/DEMO.md` for the suggested demonstration walkthrough.
@@ -87,11 +87,46 @@ See `docs/FEATURES.md` for the full feature-to-requirement mapping and
 ```bash
 npm run typecheck    # server + client type checks
 npm run build        # production build of the client
+npm --prefix server test   # backend test suite (vitest)
 ```
+
+The backend test suite covers the workflow engine, escalation engine and the REST
+API (auth, RBAC, validation, routing, EVC conflict detection) — 17 tests.
 
 ---
 
-## 6. Regulatory Safeguard
+## 7. Deployment (Docker)
+
+Run the full stack (client served by nginx on :8080, API on :4000) with one command:
+
+```bash
+cp .env.example .env         # set a strong JWT_SECRET
+docker compose up -d --build # or: make docker-up
+```
+
+The server container applies the schema and seeds demo data on first start
+(`SEED_ON_START=true`). Data and uploaded files persist in named volumes.
+Visit http://localhost:8080.
+
+Build images only: `make docker-build`. Stop: `make docker-down`.
+
+---
+
+## 8. Security & Operations
+
+- **Transport/headers**: Helmet, CORS allow-list, gzip compression.
+- **Rate limiting**: global API limiter + stricter limiter on authentication.
+- **Validation**: every mutating endpoint validates input with Zod and returns
+  structured `422` errors.
+- **Auditability**: actions are recorded with actor, role, IP and user-agent;
+  the audit trail is append-only.
+- **Observability**: structured request logging, readiness probe
+  (`GET /api/health` reports DB status and uptime), container health checks.
+- **Real-time**: Socket.IO pushes alerts/notifications to per-user rooms.
+
+---
+
+## 9. Regulatory Safeguard
 
 The platform operates in accordance with AICTE regulations and the Approval Process
 Handbook. Automated alerts, recommendations and workflow actions **support** the approval
