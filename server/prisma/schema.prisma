@@ -1,0 +1,488 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USERS & RBAC
+// ============================================================
+
+enum Role {
+  INSTITUTION
+  REGIONAL_OFFICER
+  BUREAU_OFFICER
+  EVC_MEMBER
+  COMMITTEE_MEMBER
+  COMPETENT_AUTHORITY
+  ADMIN
+}
+
+enum Region {
+  NORTH
+  SOUTH
+  EAST
+  WEST
+  CENTRAL
+  NORTH_EAST
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  fullName      String
+  role          Role
+  region        Region?
+  institutionId String?
+  designation   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  institution        Institution?        @relation(fields: [institutionId], references: [id])
+  applications       Application[]       @relation("AssignedOfficer")
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  evcMemberships     EvcMember[]
+  workflowActions    WorkflowAction[]
+  undertakingsVerified Undertaking[]     @relation("VerifiedBy")
+  documentsVerified  Document[]          @relation("VerifiedBy")
+
+  @@index([role])
+  @@index([region])
+}
+
+// ============================================================
+// INSTITUTIONS
+// ============================================================
+
+enum InstitutionType {
+  ENGINEERING
+  MANAGEMENT
+  PHARMACY
+  ARCHITECTURE
+  HOTEL_MANAGEMENT
+  POLYTECHNIC
+  UNIVERSITY
+  OTHER
+}
+
+model Institution {
+  id               String          @id @default(uuid())
+  name             String
+  aisheCode        String          @unique
+  type             InstitutionType
+  region           Region
+  state            String
+  address          String?
+  contactEmail     String?
+  contactPhone     String?
+  isNewInstitution Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  users        User[]
+  applications Application[]
+  documents    Document[]
+
+  @@index([region])
+}
+
+// ============================================================
+// RULES ENGINE (rules as data - versioned JSON)
+// ============================================================
+
+enum RuleType {
+  APH_ROUTING_MATRIX
+  SLA_TIMELINES
+  ESCALATION_MATRIX
+  NOTIFICATION_RULES
+  AGEING_THRESHOLDS
+}
+
+model RuleConfig {
+  id          String   @id @default(uuid())
+  type        RuleType
+  version     Int
+  name        String
+  description String?
+  config      Json
+  isActive    Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([type, version])
+  @@index([type, isActive])
+}
+
+// ============================================================
+// APPLICATIONS & WORKFLOW
+// ============================================================
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_SCRUTINY
+  RETURNED_TO_INSTITUTION
+  EVC_QUEUED
+  EVC_SCHEDULED
+  EVC_COMPLETED
+  UNDER_SAC_SHC
+  PENDING_DECISION
+  APPROVED
+  APPROVED_WITH_UNDERTAKING
+  REJECTED
+  WITHDRAWN
+}
+
+enum Stage {
+  SUBMISSION
+  SCRUTINY
+  RESCRUTINY
+  EVC
+  SAC_SHC
+  DECISION
+  COMPLETED
+}
+
+model Application {
+  id                 String            @id @default(uuid())
+  applicationNumber  String            @unique
+  institutionId      String
+  academicYear       String
+  programType        String
+  status             ApplicationStatus @default(DRAFT)
+  currentStage       Stage             @default(SUBMISSION)
+  routeType          String            @default("SCRUTINY_EVC")
+  assignedOfficerId  String?
+  assignedRegion     Region
+  submittedAt        DateTime?
+  decisionAt         DateTime?
+  slaDueAt           DateTime?
+  isBreached         Boolean           @default(false)
+  isHumanVerified    Boolean           @default(false)
+  remarks            String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  institution    Institution       @relation(fields: [institutionId], references: [id])
+  assignedOfficer User?            @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+  actions        WorkflowAction[]
+  undertakings   Undertaking[]
+  evcSchedules   EvcSchedule[]
+  alerts         Alert[]
+  documents      Document[]
+
+  @@index([status])
+  @@index([currentStage])
+  @@index([assignedRegion])
+  @@index([assignedOfficerId])
+}
+
+enum ActionType {
+  SUBMIT
+  SCRUTINY_PASS
+  SCRUTINY_FAIL
+  RETURN
+  RESUBMIT
+  ROUTE_TO_EVC
+  EVC_SCHEDULE
+  EVC_COMPLETE
+  ROUTE_TO_SAC_SHC
+  SAC_SHC_COMPLETE
+  PROPOSE_DECISION
+  APPROVE
+  REJECT
+  WITHDRAW
+  ESCALATE
+  AUTO_ADVANCE
+}
+
+model WorkflowAction {
+  id            String     @id @default(uuid())
+  applicationId String
+  actorId       String?
+  actionType    ActionType
+  fromStage     Stage?
+  toStage       Stage?
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus?
+  reason        String?
+  metadata      Json?
+  isAutomated   Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+  actor       User?       @relation(fields: [actorId], references: [id])
+
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// EVC SCHEDULING
+// ============================================================
+
+enum EvcStatus {
+  QUEUED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DELAYED
+}
+
+model EvcSchedule {
+  id            String    @id @default(uuid())
+  applicationId String
+  status        EvcStatus @default(QUEUED)
+  scheduledDate DateTime?
+  completedDate DateTime?
+  venue         String?
+  meetingLink   String?
+  queuedAt      DateTime  @default(now())
+  dueAt         DateTime?
+  isBreached    Boolean   @default(false)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+  members     EvcMember[]
+
+  @@index([status])
+  @@index([scheduledDate])
+}
+
+model EvcMember {
+  id             String   @id @default(uuid())
+  evcScheduleId  String
+  userId         String
+  isAvailable    Boolean  @default(true)
+  role           String?
+  createdAt      DateTime @default(now())
+
+  evcSchedule EvcSchedule @relation(fields: [evcScheduleId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@index([evcScheduleId])
+  @@index([userId])
+}
+
+// ============================================================
+// TIME-BOUND UNDERTAKINGS & COMPLIANCE
+// ============================================================
+
+enum UndertakingStatus {
+  PENDING
+  SUBMITTED
+  UNDER_VERIFICATION
+  COMPLIANT
+  NON_COMPLIANT
+  ESCALATED
+}
+
+model Undertaking {
+  id                    String            @id @default(uuid())
+  applicationId         String
+  title                 String
+  description           String
+  conditions            Json
+  dueDate               DateTime
+  status                UndertakingStatus @default(PENDING)
+  submittedAt           DateTime?
+  verifiedAt            DateTime?
+  verifiedById          String?
+  evidencePath          String?
+  verificationRemarks   String?
+  remindersSent         Int               @default(0)
+  escalated             Boolean           @default(false)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+  verifiedBy  User?       @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([applicationId])
+}
+
+// ============================================================
+// DOCUMENTS & LEASE VALIDITY
+// ============================================================
+
+enum DocumentType {
+  LEASE_DEED
+  BUILDING_APPROVAL
+  FIRE_SAFETY
+  LAND_USE
+  AFFILIATION
+  ACCREDITATION
+  OTHER
+}
+
+enum DocumentStatus {
+  VALID
+  EXPIRING_SOON
+  EXPIRED
+  RENEWAL_SUBMITTED
+  RENEWAL_VERIFIED
+  RENEWAL_REJECTED
+}
+
+model Document {
+  id                 String          @id @default(uuid())
+  institutionId      String
+  applicationId      String?
+  type               DocumentType
+  title              String
+  filePath           String
+  issuedDate         DateTime?
+  validFrom          DateTime?
+  validUntil         DateTime?
+  status             DocumentStatus  @default(VALID)
+  renewalSubmittedAt DateTime?
+  renewedUntil       DateTime?
+  expiryAlertSent    Boolean         @default(false)
+  escalated          Boolean         @default(false)
+  verifiedAt         DateTime?
+  verifiedById       String?
+  verificationRemarks String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  institution Institution  @relation(fields: [institutionId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  verifiedBy  User?        @relation("VerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([status])
+  @@index([validUntil])
+  @@index([institutionId])
+}
+
+// ============================================================
+// ALERTS, NOTIFICATIONS & ESCALATION
+// ============================================================
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertType {
+  SLA_APPROACHING
+  SLA_BREACHED
+  EVC_REMINDER
+  EVC_DELAYED
+  UNDERTAKING_DUE
+  UNDERTAKING_OVERDUE
+  DOCUMENT_EXPIRING
+  DOCUMENT_EXPIRED
+  ESCALATION
+  GENERAL
+}
+
+model Alert {
+  id            String        @id @default(uuid())
+  type          AlertType
+  severity      AlertSeverity @default(INFO)
+  title         String
+  message       String
+  applicationId String?
+  entityType    String?
+  entityId      String?
+  recipientRole Role?
+  recipientId   String?
+  isRead        Boolean       @default(false)
+  isEscalated   Boolean       @default(false)
+  escalatedTo   String?
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+
+  application Application? @relation(fields: [applicationId], references: [id])
+
+  @@index([type])
+  @@index([severity])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  READ
+}
+
+model Notification {
+  id          String              @id @default(uuid())
+  userId      String?
+  channel     NotificationChannel @default(IN_APP)
+  status      NotificationStatus  @default(QUEUED)
+  subject     String
+  body        String
+  templateId  String?
+  metadata    Json?
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime            @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([channel])
+}
+
+model Escalation {
+  id            String   @id @default(uuid())
+  entityType    String
+  entityId      String
+  reason        String
+  fromRole      Role?
+  toRole        Role
+  toUserId      String?
+  level         Int      @default(1)
+  resolved      Boolean  @default(false)
+  resolvedAt    DateTime?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([resolved])
+}
+
+// ============================================================
+// AUDIT TRAIL (immutable)
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userRole   Role?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
