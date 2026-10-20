@@ -23,8 +23,10 @@ pnpm-debug.log*
 
 # Database
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+server/prisma/dev.db*
 
 # Uploads
 uploads/

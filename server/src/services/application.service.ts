@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { ApplicationStatus, Stage, Region } from '@prisma/client';
+import { ApplicationStatus, Stage, Region } from '../types/domain';
 import { RulesEngine } from '../engines/rules.engine';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -5,7 +5,7 @@ import { ApplicationService } from '../services/application.service';
 import { WorkflowEngine } from '../engines/workflow.engine';
 import { RulesEngine } from '../engines/rules.engine';
 import { recordAudit } from '../services/audit.service';
-import { NotificationChannel } from '@prisma/client';
+import { NotificationChannel } from '../types/domain';
 
 export async function listApplications(req: Request, res: Response) {
   const { region, stage, status, officerId } = req.query as Record<string, string>;

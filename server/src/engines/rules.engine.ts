@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { RuleType } from '@prisma/client';
+import { RuleType } from '../types/domain';
 import {
   APH_ROUTING_MATRIX,
   SLA_TIMELINES,
@@ -49,7 +49,13 @@ export class RulesEngine {
       where: { type, isActive: true },
       orderBy: { version: 'desc' },
     });
-    if (active) return active.config as T;
+    if (active) {
+      try {
+        return JSON.parse(active.config) as T;
+      } catch {
+        return this.defaults[type] as T;
+      }
+    }
     return this.defaults[type] as T;
   }
 

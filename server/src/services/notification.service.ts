@@ -1,5 +1,12 @@
 import { prisma } from '../config/prisma';
-import { NotificationChannel, NotificationStatus } from '@prisma/client';
+import { NotificationChannel, NotificationStatus } from '../types/domain';
+
+let emitter: { emit: (event: string, payload: unknown) => void } | null = null;
+
+/** Register a real-time emitter (Socket.IO) for broadcast events. */
+export function setRealtimeEmitter(io: { emit: (event: string, payload: unknown) => void }) {
+  emitter = io;
+}
 
 interface NotifyParams {
   userId?: string | null;
@@ -18,25 +25,11 @@ interface NotifyParams {
 export async function notify(params: NotifyParams) {
   const channel = params.channel ?? NotificationChannel.IN_APP;
 
-  if (channel === NotificationChannel.IN_APP) {
-    const record = await prisma.notification.create({
-      data: {
-        userId: params.userId ?? null,
-        channel,
-        status: NotificationStatus.SENT,
-        subject: params.subject,
-        body: params.body,
-        templateId: params.templateId,
-        metadata: (params.metadata ?? undefined) as never,
-        sentAt: new Date(),
-      },
-    });
-    return record;
+  if (channel !== NotificationChannel.IN_APP) {
+    console.log(`[notification:${channel}] to=${params.userId} subject="${params.subject}"`);
   }
 
-  // Console adapter for EMAIL / SMS channels (demo)
-  console.log(`[notification:${channel}] to=${params.userId} subject="${params.subject}"`);
-  return prisma.notification.create({
+  const record = await prisma.notification.create({
     data: {
       userId: params.userId ?? null,
       channel,
@@ -44,10 +37,13 @@ export async function notify(params: NotifyParams) {
       subject: params.subject,
       body: params.body,
       templateId: params.templateId,
-      metadata: (params.metadata ?? undefined) as never,
+      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
       sentAt: new Date(),
     },
   });
+
+  emitter?.emit('notification', record);
+  return record;
 }
 
 export async function createAlert(params: {
@@ -62,18 +58,21 @@ export async function createAlert(params: {
   recipientId?: string;
   metadata?: unknown;
 }) {
-  return prisma.alert.create({
+  const alert = await prisma.alert.create({
     data: {
-      type: params.type as never,
-      severity: (params.severity as never) ?? 'INFO',
+      type: params.type,
+      severity: params.severity ?? 'INFO',
       title: params.title,
       message: params.message,
       applicationId: params.applicationId ?? null,
       entityType: params.entityType,
       entityId: params.entityId,
-      recipientRole: (params.recipientRole as never) ?? null,
+      recipientRole: params.recipientRole ?? null,
       recipientId: params.recipientId ?? null,
-      metadata: (params.metadata ?? undefined) as never,
+      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
     },
   });
+
+  emitter?.emit('alert', alert);
+  return alert;
 }

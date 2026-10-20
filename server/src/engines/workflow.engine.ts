@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { ActionType, ApplicationStatus, Stage } from '@prisma/client';
+import { ActionType, ApplicationStatus, Stage } from '../types/domain';
 import { RulesEngine } from './rules.engine';
 import { recordAudit } from '../services/audit.service';
 import { createAlert, notify } from '../services/notification.service';
@@ -15,10 +15,10 @@ export interface TransitionInput {
 
 export interface TransitionResult {
   applicationId: string;
-  fromStage: Stage;
-  toStage: Stage;
-  fromStatus: ApplicationStatus;
-  toStatus: ApplicationStatus;
+  fromStage: string;
+  toStage: string;
+  fromStatus: string;
+  toStatus: string;
   requiresHumanConfirmation: boolean;
 }
 
@@ -77,8 +77,8 @@ export class WorkflowEngine {
     const fromStatus = app.status;
     const requiresHumanConfirmation = HUMAN_OVERSIGHT_ACTIONS.includes(input.actionType);
 
-    let toStage: Stage = fromStage;
-    let toStatus: ApplicationStatus = fromStatus;
+    let toStage: string = fromStage;
+    let toStatus: string = fromStatus;
     let slaDueAt = app.slaDueAt;
 
     switch (input.actionType) {
@@ -135,7 +135,7 @@ export class WorkflowEngine {
         fromStatus,
         toStatus,
         reason: input.reason,
-        metadata: (input.metadata ?? undefined) as never,
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
         isAutomated: !input.actorId,
       },
     });

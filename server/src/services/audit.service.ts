@@ -1,9 +1,8 @@
 import { prisma } from '../config/prisma';
-import { Role } from '@prisma/client';
 
 interface AuditParams {
   userId?: string | null;
-  userRole?: Role | null;
+  userRole?: string | null;
   action: string;
   entityType: string;
   entityId?: string | null;
@@ -25,7 +24,7 @@ export async function recordAudit(params: AuditParams): Promise<void> {
         action: params.action,
         entityType: params.entityType,
         entityId: params.entityId ?? null,
-        details: (params.details ?? undefined) as never,
+        details: params.details !== undefined ? JSON.stringify(params.details) : null,
         ipAddress: params.ipAddress ?? null,
         userAgent: params.userAgent ?? null,
       },
