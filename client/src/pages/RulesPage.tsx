@@ -31,6 +31,7 @@ export function RulesPage() {
         setVersions(v.data.data);
         setDraft(JSON.stringify(a.data.data[selected] ?? {}, null, 2));
       })
+      .catch((err) => push(apiError(err), 'error'))
       .finally(() => setLoading(false));
   };
 

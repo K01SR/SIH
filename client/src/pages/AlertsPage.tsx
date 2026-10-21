@@ -7,7 +7,7 @@ import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
 import { formatDateTime, humanize } from '../utils';
 import type { Alert, Escalation } from '../types';
 
-const ROLES = ['INSTITUTION', 'REGIONAL_OFFICER', 'BUREAU_OFFICER', 'EVC_MEMBER', 'COMMITTEE_MEMBER', 'COMPETENT_AUTHORITY'];
+const ROLES = ['INSTITUTION', 'REGIONAL_OFFICER', 'BUREAU_OFFICER', 'EVC_MEMBER', 'COMMITTEE_MEMBER', 'COMPETENT_AUTHORITY', 'ADMIN'];
 
 function BulkNotifyModal({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
   const { push } = useToast();
@@ -110,6 +110,7 @@ function BulkNotifyModal({ onClose, onSent }: { onClose: () => void; onSent: () 
 
 export function AlertsPage() {
   const { user } = useAuth();
+  const { push } = useToast();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +124,7 @@ export function AlertsPage() {
         setAlerts(a.data.data);
         setEscalations(e.data.data);
       })
+      .catch((err) => push(apiError(err), 'error'))
       .finally(() => setLoading(false));
   };
 
@@ -131,11 +133,16 @@ export function AlertsPage() {
     const onAlert = () => load();
     window.addEventListener('aicte:alert', onAlert);
     return () => window.removeEventListener('aicte:alert', onAlert);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markRead = async (id: string) => {
-    await api.patch(`/alerts/${id}/read`);
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
+    try {
+      await api.patch(`/alerts/${id}/read`);
+      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
+    } catch (err) {
+      push(apiError(err), 'error');
+    }
   };
 
   const canSweep = ['ADMIN'].includes(user?.role ?? '');

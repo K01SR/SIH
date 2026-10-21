@@ -15,8 +15,14 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const raw = localStorage.getItem('user');
-    return raw ? (JSON.parse(raw) as User) : null;
+    // Corrupted storage must not white-screen the app.
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? (JSON.parse(raw) as User) : null;
+    } catch {
+      localStorage.removeItem('user');
+      return null;
+    }
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(false);
@@ -27,6 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api
         .get('/auth/me')
         .then((res) => setUser(res.data.data))
+        .catch(() => {
+          // The stored token is no longer valid.
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken(null);
+        })
         .finally(() => setLoading(false));
     }
   }, [token, user]);

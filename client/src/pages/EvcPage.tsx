@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarPlus, AlertTriangle } from 'lucide-react';
+import { CalendarPlus, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -13,23 +13,47 @@ export function EvcPage() {
   const { push } = useToast();
   const [evcs, setEvcs] = useState<EvcSchedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [scheduleFor, setScheduleFor] = useState<EvcSchedule | null>(null);
   const [members, setMembers] = useState<User[]>([]);
+  const [completing, setCompleting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
+    setError('');
     api
       .get('/evc')
       .then((res) => setEvcs(res.data.data))
+      .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     load();
-    api.get('/users').then((res) => setMembers(res.data.data)).catch(() => {});
+    // The server returns a staff-only directory; committee members are filtered below.
+    api
+      .get('/users')
+      .then((res) => setMembers(res.data.data))
+      .catch(() => setMembers([]));
   }, []);
 
   const canSchedule = ['ADMIN', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(user?.role ?? '');
+  const canComplete = ['ADMIN', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'EVC_MEMBER', 'COMMITTEE_MEMBER'].includes(
+    user?.role ?? ''
+  );
+
+  const completeEvc = async (evc: EvcSchedule) => {
+    setCompleting(evc.id);
+    try {
+      await api.post(`/evc/${evc.id}/complete`);
+      push('EVC marked as completed — application advanced');
+      load();
+    } catch (err) {
+      push(apiError(err), 'error');
+    } finally {
+      setCompleting(null);
+    }
+  };
 
   return (
     <div>
@@ -37,6 +61,14 @@ export function EvcPage() {
 
       {loading ? (
         <Spinner />
+      ) : error ? (
+        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <AlertTriangle className="text-red-500" size={32} />
+          <p className="text-sm text-slate-600">{error}</p>
+          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            Retry
+          </button>
+        </Card>
       ) : evcs.length === 0 ? (
         <EmptyState message="No EVCs in the queue" />
       ) : (
@@ -79,6 +111,15 @@ export function EvcPage() {
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     <CalendarPlus size={15} /> {e.status === 'SCHEDULED' ? 'Reschedule EVC' : 'Schedule EVC'}
+                  </button>
+                )}
+                {canComplete && e.status === 'SCHEDULED' && (
+                  <button
+                    onClick={() => completeEvc(e)}
+                    disabled={completing === e.id}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 bg-white px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-60"
+                  >
+                    <CheckCircle2 size={15} /> {completing === e.id ? 'Completing…' : 'Mark EVC Completed'}
                   </button>
                 )}
               </Card>
@@ -152,7 +193,13 @@ function ScheduleEvcModal({
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </Field>
         <Field label="Venue">
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. AICTE Regional Office" />
+          <input
+            value={venue}
+            onChange={(e) => setVenue(e.target.value)}
+            required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="e.g. AICTE Regional Office"
+          />
         </Field>
         <Field label="Committee Members (conflict detection enabled)">
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">

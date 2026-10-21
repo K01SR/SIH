@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ScrollText } from 'lucide-react';
-import { api } from '../api/client';
+import { ScrollText, AlertTriangle } from 'lucide-react';
+import { api, apiError } from '../api/client';
 import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
 import { formatDateTime, humanize } from '../utils';
 import type { AuditLog } from '../types';
@@ -8,13 +8,21 @@ import type { AuditLog } from '../types';
 export function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError('');
     api
       .get('/audit', { params: { limit: '300' } })
       .then((res) => setLogs(res.data.data))
+      .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const filtered = logs.filter(
@@ -39,6 +47,14 @@ export function AuditPage() {
 
       {loading ? (
         <Spinner />
+      ) : error ? (
+        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <AlertTriangle className="text-red-500" size={32} />
+          <p className="text-sm text-slate-600">{error}</p>
+          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            Retry
+          </button>
+        </Card>
       ) : filtered.length === 0 ? (
         <EmptyState message="No audit entries" />
       ) : (

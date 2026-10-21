@@ -15,6 +15,7 @@ interface ActionDef {
   label: string;
   style: string;
   gated: boolean;
+  reasonRequired?: boolean;
 }
 
 export function ApplicationDetailPage() {
@@ -28,6 +29,10 @@ export function ApplicationDetailPage() {
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [officers, setOfficers] = useState<{ id: string; fullName: string; role: string }[]>([]);
+  const [assigning, setAssigning] = useState(false);
+
+  const canAssign = ['BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN'].includes(user?.role ?? '');
 
   const load = () => {
     api
@@ -41,6 +46,33 @@ export function ApplicationDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!canAssign) return;
+    api
+      .get('/users')
+      .then((res) =>
+        setOfficers(
+          (res.data.data as { id: string; fullName: string; role: string }[]).filter((u) =>
+            ['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(u.role)
+          )
+        )
+      )
+      .catch(() => setOfficers([]));
+  }, [canAssign]);
+
+  const assignOfficer = async (officerId: string) => {
+    setAssigning(true);
+    try {
+      await api.post(`/applications/${id}/assign`, { officerId: officerId || null });
+      push(officerId ? 'Officer assigned' : 'Officer unassigned');
+      load();
+    } catch (err) {
+      push(apiError(err), 'error');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   if (loading) return <Spinner />;
   if (!app) {
@@ -67,20 +99,50 @@ export function ApplicationDetailPage() {
   }
 
   const role = user?.role;
+  const stage = app.currentStage;
+  const status = app.status;
   const actions: ActionDef[] = [];
-  if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-    actions.push({ action: 'SCRUTINY_PASS', label: 'Pass Scrutiny / Advance Stage', style: 'bg-blue-600', gated: false });
-    actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false });
-    actions.push({ action: 'ROUTE_TO_EVC', label: 'Route to EVC', style: 'bg-purple-600', gated: false });
-  }
-  if (['COMPETENT_AUTHORITY', 'BUREAU_OFFICER'].includes(role ?? '')) {
-    actions.push({ action: 'APPROVE', label: 'Approve (Statutory)', style: 'bg-green-600', gated: true });
-    actions.push({ action: 'REJECT', label: 'Reject (Statutory)', style: 'bg-red-600', gated: true });
+
+  // A closed case cannot be actioned further.
+  const isClosed = ['APPROVED', 'APPROVED_WITH_UNDERTAKING', 'REJECTED', 'WITHDRAWN'].includes(status);
+
+  if (!isClosed) {
+    // Scrutiny actions are only meaningful before the decision stage.
+    const inScrutiny = ['SUBMISSION', 'SCRUTINY', 'RESCRUTINY'].includes(stage);
+    if (inScrutiny) {
+      if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
+        actions.push({ action: 'SCRUTINY_PASS', label: 'Pass Scrutiny / Advance Stage', style: 'bg-blue-600', gated: false });
+      }
+      if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+      }
+      // Routing to EVC is restricted to regional/bureau officers by the server.
+      if (['REGIONAL_OFFICER', 'BUREAU_OFFICER'].includes(role ?? '')) {
+        actions.push({ action: 'ROUTE_TO_EVC', label: 'Route to EVC', style: 'bg-purple-600', gated: false });
+      }
+    } else if (['EVC', 'SAC_SHC'].includes(stage)) {
+      if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
+        actions.push({ action: 'AUTO_ADVANCE', label: 'Advance Stage', style: 'bg-blue-600', gated: false });
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+      }
+    } else if (stage === 'DECISION') {
+      if (['COMPETENT_AUTHORITY', 'BUREAU_OFFICER'].includes(role ?? '')) {
+        actions.push({ action: 'APPROVE', label: 'Approve (Statutory)', style: 'bg-green-600', gated: true });
+        actions.push({ action: 'REJECT', label: 'Reject (Statutory)', style: 'bg-red-600', gated: true });
+      }
+      // Committee and EVC members may recommend an outcome but never take it.
+      if (['COMMITTEE_MEMBER', 'EVC_MEMBER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
+        actions.push({ action: 'PROPOSE_DECISION', label: 'Propose Recommendation', style: 'bg-indigo-600', gated: true });
+      }
+      if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+      }
+    }
   }
 
   const submit = async () => {
     if (!modal) return;
-    if (modal.gated && !reason.trim()) {
+    if ((modal.gated || modal.reasonRequired) && !reason.trim()) {
       push('A recorded reason is mandatory (human oversight)', 'error');
       return;
     }
@@ -201,6 +263,29 @@ export function ApplicationDetailPage() {
               {app.remarks}
             </div>
           )}
+          {canAssign && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <label className="mb-1 block text-xs font-medium uppercase text-slate-400">
+                Assigned Officer
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={app.assignedOfficerId ?? ''}
+                  onChange={(e) => assignOfficer(e.target.value)}
+                  disabled={assigning}
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:opacity-60"
+                >
+                  <option value="">Unassigned</option>
+                  {officers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.fullName} ({humanize(o.role)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {assigning && <p className="mt-1 text-xs text-slate-400">Saving assignment…</p>}
+            </div>
+          )}
         </Card>
 
         <Card>
@@ -270,7 +355,7 @@ export function ApplicationDetailPage() {
             You are about to <span className="font-semibold">{modal.label}</span> for application{' '}
             <span className="font-semibold">{app.applicationNumber}</span>.
           </p>
-          <Field label={modal.gated ? 'Reason (mandatory)' : 'Reason (optional)'}>
+          <Field label={modal.gated || modal.reasonRequired ? 'Reason (mandatory)' : 'Reason (optional)'}>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}

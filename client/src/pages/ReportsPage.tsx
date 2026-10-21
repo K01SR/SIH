@@ -8,7 +8,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { api } from '../api/client';
+import { AlertTriangle } from 'lucide-react';
+import { api, apiError } from '../api/client';
 import { Badge, Card, PageHeader, Spinner } from '../components/ui';
 import { formatDate, humanize } from '../utils';
 
@@ -21,19 +22,42 @@ export function ReportsPage() {
   const [overdue, setOverdue] = useState<{ breachedApps: unknown[]; overdueUndertakings: unknown[]; expiredDocs: unknown[] } | null>(null);
   const [compliance, setCompliance] = useState<{ undertakings: { status: string; _count: { _all: number } }[]; documents: { status: string; _count: { _all: number } }[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [tab, setTab] = useState<'performance' | 'overdue' | 'compliance'>('performance');
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError('');
     Promise.all([api.get('/reports/region-performance'), api.get('/reports/overdue'), api.get('/reports/compliance')])
       .then(([r, o, c]) => {
         setRegionPerf(r.data.data);
         setOverdue(o.data.data);
         setCompliance(c.data.data);
       })
+      .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   if (loading) return <Spinner />;
+
+  if (error) {
+    return (
+      <div>
+        <PageHeader title="Consolidated Reports" subtitle="Pendency, compliance, document validity, overdue cases and Region-wise performance" />
+        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <AlertTriangle className="text-red-500" size={32} />
+          <p className="text-sm text-slate-600">{error}</p>
+          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            Retry
+          </button>
+        </Card>
+      </div>
+    );
+  }
 
   const perfData = Object.entries(regionPerf).map(([region, v]) => ({
     name: humanize(region),

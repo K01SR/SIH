@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
-import { api } from '../api/client';
+import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
 import { formatDate, humanize, daysUntil } from '../utils';
@@ -24,6 +24,7 @@ export function ApplicationsPage() {
     api
       .get('/applications')
       .then((res) => setApps(res.data.data))
+      .catch((err) => push(apiError(err), 'error'))
       .finally(() => setLoading(false));
   };
 
@@ -80,7 +81,21 @@ export function ApplicationsPage() {
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
           >
             <option value="">All statuses</option>
-            {['SUBMITTED', 'UNDER_SCRUTINY', 'EVC_QUEUED', 'EVC_SCHEDULED', 'UNDER_SAC_SHC', 'PENDING_DECISION', 'APPROVED', 'APPROVED_WITH_UNDERTAKING', 'REJECTED'].map((s) => (
+            {[
+              'DRAFT',
+              'SUBMITTED',
+              'UNDER_SCRUTINY',
+              'RETURNED_TO_INSTITUTION',
+              'EVC_QUEUED',
+              'EVC_SCHEDULED',
+              'EVC_COMPLETED',
+              'UNDER_SAC_SHC',
+              'PENDING_DECISION',
+              'APPROVED',
+              'APPROVED_WITH_UNDERTAKING',
+              'REJECTED',
+              'WITHDRAWN',
+            ].map((s) => (
               <option key={s} value={s}>{humanize(s)}</option>
             ))}
           </select>
@@ -111,7 +126,16 @@ export function ApplicationsPage() {
                   <tr
                     key={a.id}
                     onClick={() => navigate(`/applications/${a.id}`)}
-                    className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/applications/${a.id}`);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Open application ${a.applicationNumber}`}
+                    className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 focus:bg-blue-50 focus:outline-none"
                   >
                     <td className="px-4 py-3 font-medium text-slate-800">{a.applicationNumber}</td>
                     <td className="px-4 py-3 text-slate-600">{a.institution?.name}</td>

@@ -28,7 +28,20 @@ api.interceptors.response.use(
 
 export function apiError(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.message || error.message;
+    const data = error.response?.data;
+    if (data?.message) {
+      // Surface which field failed validation, not just "Validation failed".
+      const details = data.errors as { path?: string; message?: string }[] | undefined;
+      if (Array.isArray(details) && details.length > 0) {
+        const fields = details
+          .map((d) => (d.path ? `${d.path}: ${d.message}` : d.message))
+          .filter(Boolean)
+          .join('; ');
+        return fields ? `${data.message} (${fields})` : data.message;
+      }
+      return data.message;
+    }
+    return error.message;
   }
   return 'Something went wrong';
 }
