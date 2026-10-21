@@ -8,6 +8,17 @@ EVC scheduling, pendency monitoring, time-bound undertakings, institutional comp
 and validity of prescribed documents — with real-time dashboards, automated
 notifications, deadline reminders, escalation and a complete digital audit trail.
 
+> **Highlights:** three engines (Rules / Workflow / Escalation), **rules as versioned data**
+> editable without redeploy, a **human-oversight gate** for statutory actions, EVC scheduling
+> with **conflict detection**, **predictive pendency**, real-time alerts, and an append-only
+> audit trail. All 34 PS + evaluation features delivered — see [`docs/FEATURES.md`](docs/FEATURES.md).
+
+**Pitch & demo materials:** [`docs/pitch/PITCH.md`](docs/pitch/PITCH.md) ·
+[`docs/pitch/ARCHITECTURE.md`](docs/pitch/ARCHITECTURE.md) ·
+[`docs/pitch/SLIDES.md`](docs/pitch/SLIDES.md) ·
+[`docs/pitch/DEMO-VIDEO-SCRIPT.md`](docs/pitch/DEMO-VIDEO-SCRIPT.md) ·
+[`docs/DEMO.md`](docs/DEMO.md) (90-sec quick tour + 5-min walkthrough).
+
 ---
 
 ## 1. Quick Start
@@ -95,7 +106,7 @@ API (auth, RBAC, validation, routing, EVC conflict detection) — 17 tests.
 
 ---
 
-## 7. Deployment (Docker)
+## 6. Deployment (Docker)
 
 Run the full stack (client served by nginx on :8080, API on :4000) with one command:
 
@@ -112,7 +123,7 @@ Build images only: `make docker-build`. Stop: `make docker-down`.
 
 ---
 
-## 8. Security & Operations
+## 7. Security & Operations
 
 - **Transport/headers**: Helmet, CORS allow-list, gzip compression.
 - **Rate limiting**: global API limiter + stricter limiter on authentication.
@@ -126,10 +137,22 @@ Build images only: `make docker-build`. Stop: `make docker-down`.
 
 ---
 
-## 9. Regulatory Safeguard
+## 8. Regulatory Safeguard
 
 The platform operates in accordance with AICTE regulations and the Approval Process
 Handbook. Automated alerts, recommendations and workflow actions **support** the approval
 process; they do not replace statutory scrutiny, verification, inspections or decisions
 reserved for the competent authority. Every statutory action requires an explicit,
 recorded confirmation with reason, captured in the audit trail.
+
+---
+
+## 9. Screenshots
+
+Add demo captures to [`docs/pitch/screenshots/`](docs/pitch/screenshots/) (see that folder's
+README for the exact screens to capture and how). Embed them here once captured, e.g.:
+
+```markdown
+![Dashboard](docs/pitch/screenshots/02-dashboard.png)
+```
+
