@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../src/config/prisma';
 import { Role, Region, InstitutionType, ApplicationStatus, Stage, RuleType } from '../src/types/domain';
 import {
@@ -12,6 +14,64 @@ import {
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 const daysFrom = (n: number) => new Date(Date.now() + n * DAY);
+
+/**
+ * Creates a small placeholder PDF on disk so seeded document links resolve to a
+ * real file instead of a 404 during demonstrations.
+ *
+ * The output is a spec-compliant PDF 1.4 file with a real cross-reference table
+ * so that strict viewers (browsers, PDF.js) open it without a repair prompt.
+ */
+function writePlaceholderPdf(relativePath: string, title: string) {
+  const uploadDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const target = path.join(uploadDir, path.basename(relativePath));
+  if (fs.existsSync(target)) return;
+
+  const escapePdf = (s: string) => s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const body = [
+    'BT /F1 14 Tf 60 760 Td (AICTE - Sample Document) Tj ET',
+    `BT /F1 11 Tf 60 735 Td (${escapePdf(title)}) Tj ET`,
+    'BT /F1 9 Tf 60 710 Td (Placeholder file generated for demonstration purposes.) Tj ET',
+  ].join('\n');
+
+  const objects = [
+    '<</Type/Catalog/Pages 2 0 R>>',
+    '<</Type/Pages/Kids[3 0 R]/Count 1>>',
+    '<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>',
+    `<</Length ${Buffer.byteLength(body, 'utf8')}>>stream\n${body}\nendstream`,
+    '<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>',
+  ];
+
+  const header = '%PDF-1.4\n';
+  const chunks: string[] = [header];
+  const offsets: number[] = [];
+  let cursor = Buffer.byteLength(header, 'utf8');
+
+  objects.forEach((obj, i) => {
+    const text = `${i + 1} 0 obj\n${obj}\nendobj\n`;
+    offsets.push(cursor);
+    chunks.push(text);
+    cursor += Buffer.byteLength(text, 'utf8');
+  });
+
+  const xrefStart = cursor;
+  const xrefRows = offsets.map((off) => `${String(off).padStart(10, '0')} 00000 n `).join('\n');
+  const xref = [
+    'xref',
+    `0 ${objects.length + 1}`,
+    '0000000000 65535 f ',
+    xrefRows,
+    `trailer<</Size ${objects.length + 1}/Root 1 0 R>>`,
+    `startxref`,
+    `${xrefStart}`,
+    '%%EOF',
+    '',
+  ].join('\n');
+  chunks.push(xref);
+
+  fs.writeFileSync(target, chunks.join(''), 'utf8');
+}
 
 async function main() {
   console.log('[seed] clearing existing data...');
@@ -184,6 +244,15 @@ async function main() {
   });
 
   console.log('[seed] documents...');
+  const seededDocuments: Array<[string, string]> = [
+    ['uploads/ltce-lease.pdf', 'Campus Lease Deed (10 acres)'],
+    ['uploads/sunrise-fire.pdf', 'Fire Safety Certificate'],
+    ['uploads/ganga-building.pdf', 'Building Plan Approval'],
+    ['uploads/everest-lease.pdf', 'Land Lease Agreement'],
+    ['uploads/land-use-conversion.pdf', 'Land Use Conversion Approval'],
+  ];
+  for (const [file, title] of seededDocuments) writePlaceholderPdf(file, title);
+
   await prisma.document.create({
     data: { institutionId: institutions[0].id, type: 'LEASE_DEED', title: 'Campus Lease Deed (10 acres)', filePath: 'uploads/ltce-lease.pdf', validFrom: daysAgo(1000), validUntil: daysFrom(6), status: 'VALID' },
   });

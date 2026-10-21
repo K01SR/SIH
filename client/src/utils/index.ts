@@ -5,18 +5,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Formats the calendar day of an instant in UTC. Dates on the server (SLA
+ * deadlines, document validity, undertaking due dates) are UTC-based, so
+ * rendering them in UTC keeps the displayed day consistent with the countdown.
+ */
 export function formatDate(value?: string | null) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-IN', {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
 export function formatDateTime(value?: string | null) {
   if (!value) return '—';
-  return new Date(value).toLocaleString('en-IN', {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -25,10 +37,15 @@ export function formatDateTime(value?: string | null) {
   });
 }
 
+/** Whole calendar days from today (UTC) to the target date; negative when overdue. */
 export function daysUntil(value?: string | null) {
   if (!value) return null;
-  const diff = new Date(value).getTime() - Date.now();
-  return Math.ceil(diff / (24 * 60 * 60 * 1000));
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const targetUtc = Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate());
+  return Math.round((targetUtc - todayUtc) / DAY_MS);
 }
 
 export function humanize(value?: string | null) {
@@ -74,3 +91,14 @@ export const STATUS_COLORS: Record<string, string> = {
 };
 
 export const STAGES = ['SUBMISSION', 'SCRUTINY', 'EVC', 'SAC_SHC', 'DECISION', 'COMPLETED'];
+
+/**
+ * Resolves a stored file path into a URL the browser can fetch.
+ * Stored paths are server-relative (e.g. "uploads/x.pdf" or "/uploads/x.pdf");
+ * absolute URLs are returned untouched.
+ */
+export function fileUrl(path?: string | null): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return `/${path.replace(/^\/+/, '')}`;
+}

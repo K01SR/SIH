@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
 import { Modal, Field } from './ApplicationsPage';
-import { formatDate, daysUntil, humanize } from '../utils';
+import { formatDate, daysUntil, humanize, fileUrl } from '../utils';
 import type { DocumentRecord } from '../types';
 
 export function DocumentsPage() {
@@ -22,6 +22,7 @@ export function DocumentsPage() {
     api
       .get('/documents')
       .then((res) => setDocs(res.data.data))
+      .catch((err) => push(apiError(err), 'error'))
       .finally(() => setLoading(false));
   };
 
@@ -72,7 +73,7 @@ export function DocumentsPage() {
                       {d.title}
                       {d.filePath && (
                         <a
-                          href={d.filePath}
+                          href={fileUrl(d.filePath)}
                           target="_blank"
                           rel="noreferrer"
                           className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"

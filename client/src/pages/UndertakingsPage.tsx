@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ClipboardCheck, Upload, AlertTriangle } from 'lucide-react';
-import { api, apiError } from '../api/client';
+import { api, apiError, uploadFile } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
 import { Modal, Field } from './ApplicationsPage';
-import { formatDate, daysUntil, humanize } from '../utils';
+import { formatDate, daysUntil, humanize, fileUrl } from '../utils';
 import type { Undertaking } from '../types';
 
 export function UndertakingsPage() {
@@ -13,14 +13,17 @@ export function UndertakingsPage() {
   const { push } = useToast();
   const [items, setItems] = useState<Undertaking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [submitFor, setSubmitFor] = useState<Undertaking | null>(null);
   const [verifyFor, setVerifyFor] = useState<Undertaking | null>(null);
 
   const load = () => {
     setLoading(true);
+    setError('');
     api
       .get('/undertakings')
       .then((res) => setItems(res.data.data))
+      .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
   };
 
@@ -37,6 +40,14 @@ export function UndertakingsPage() {
 
       {loading ? (
         <Spinner />
+      ) : error ? (
+        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <AlertTriangle className="text-red-500" size={32} />
+          <p className="text-sm text-slate-600">{error}</p>
+          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            Retry
+          </button>
+        </Card>
       ) : items.length === 0 ? (
         <EmptyState message="No undertakings recorded" />
       ) : (
@@ -119,18 +130,27 @@ export function UndertakingsPage() {
 
 function SubmitModal({ undertaking, onClose, onSaved }: { undertaking: Undertaking; onClose: () => void; onSaved: () => void }) {
   const { push } = useToast();
-  const [filePath, setFilePath] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!file) {
+      push('Please attach the supporting document', 'error');
+      return;
+    }
     setSaving(true);
     try {
-      await api.post(`/undertakings/${undertaking.id}/submit`, { evidencePath: filePath });
+      setUploading(true);
+      const evidencePath = await uploadFile(file);
+      setUploading(false);
+      await api.post(`/undertakings/${undertaking.id}/submit`, { evidencePath });
       onSaved();
     } catch (err) {
       push(apiError(err), 'error');
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   };
@@ -138,13 +158,19 @@ function SubmitModal({ undertaking, onClose, onSaved }: { undertaking: Undertaki
   return (
     <Modal title={`Submit Evidence · ${undertaking.title}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Supporting Document (reference)">
-          <input value={filePath} onChange={(e) => setFilePath(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. fire-safety-certificate.pdf" />
+        <Field label="Supporting Document">
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
+          />
+          <p className="mt-1 text-xs text-slate-400">PDF or image, up to 15 MB.</p>
         </Field>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-            {saving ? 'Submitting…' : 'Submit'}
+          <button type="submit" disabled={saving || uploading || !file} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {uploading ? 'Uploading…' : saving ? 'Submitting…' : 'Submit'}
           </button>
         </div>
       </form>
@@ -176,7 +202,15 @@ function VerifyModal({ undertaking, onClose, onSaved }: { undertaking: Undertaki
       <form onSubmit={submit} className="space-y-4">
         {undertaking.evidencePath && (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Evidence submitted: <span className="font-mono">{undertaking.evidencePath}</span>
+            Evidence submitted:{' '}
+            <a
+              href={fileUrl(undertaking.evidencePath)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-blue-600 underline"
+            >
+              {undertaking.evidencePath}
+            </a>
           </p>
         )}
         <Field label="Decision">
