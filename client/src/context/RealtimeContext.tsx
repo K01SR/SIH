@@ -16,16 +16,17 @@ const RealtimeContext = createContext<RealtimeContextValue>({ connected: false, 
  * live alerts/notifications as toasts. Reconnects automatically.
  */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { push } = useToast();
   const [connected, setConnected] = useState(false);
   const [lastAlert, setLastAlert] = useState<unknown | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !token) return;
     const socket: Socket = io('/', {
       path: '/socket.io',
-      auth: { userId: user.id },
+      // The server verifies this token; it decides which room we join.
+      auth: { token },
       transports: ['websocket', 'polling'],
     });
 
@@ -45,7 +46,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     return () => {
       socket.disconnect();
     };
-  }, [user, push]);
+  }, [user, token, push]);
 
   return <RealtimeContext.Provider value={{ connected, lastAlert }}>{children}</RealtimeContext.Provider>;
 }

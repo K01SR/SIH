@@ -127,11 +127,12 @@ export class EscalationEngine {
         severity: 'WARNING',
         title: `Undertaking overdue: ${u.application.applicationNumber}`,
         message: `"${u.title}" was due on ${u.dueDate.toDateString()}.`,
-        applicationId: u.applicationId,
-        entityType: 'Undertaking',
-        entityId: u.id,
-        recipientRole: rule?.toRole,
-      });
+          applicationId: u.applicationId,
+          entityType: 'Undertaking',
+          entityId: u.id,
+          recipientRole: rule?.toRole,
+          institutionId: u.application.institutionId,
+        });
       await this.escalate('Undertaking', u.id, 'Undertaking unfulfilled beyond due date', rule?.toRole);
       summary.escalationsCreated++;
     }
@@ -155,6 +156,7 @@ export class EscalationEngine {
           entityType: 'Document',
           entityId: doc.id,
           recipientRole: rule?.toRole,
+          institutionId: doc.institutionId,
         });
         await this.escalate('Document', doc.id, 'Prescribed document expired', rule?.toRole);
         summary.escalationsCreated++;
@@ -172,6 +174,7 @@ export class EscalationEngine {
           entityType: 'Document',
           entityId: doc.id,
           recipientRole: 'INSTITUTION',
+          institutionId: doc.institutionId,
         });
       }
     }

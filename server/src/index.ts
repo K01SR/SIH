@@ -7,6 +7,7 @@ import { Server as SocketServer } from 'socket.io';
 import { env } from './config/env';
 import routes from './routes';
 import { notFound, errorHandler } from './middleware/error';
+import { verifyToken } from './middleware/auth';
 import { requestLogger } from './middleware/requestLogger';
 import { apiLimiter } from './middleware/rateLimit';
 import { startEscalationScheduler } from './scheduler';
@@ -32,9 +33,15 @@ app.set('io', io);
 setRealtimeEmitter(io);
 
 // Attach authenticated socket rooms so users only receive relevant events.
+// The identity is derived from a verified token, never from a client-supplied
+// id, so a socket cannot claim another user's alerts.
 io.use((socket, next) => {
-  const userId = socket.handshake.auth?.userId as string | undefined;
-  if (userId) socket.data.userId = userId;
+  const handshake = socket.handshake.auth as { token?: string } | undefined;
+  const token = handshake?.token ?? (socket.handshake.headers.authorization as string | undefined)?.replace(/^Bearer /, '');
+  const payload = verifyToken(token);
+  if (!payload) return next(new Error('Unauthorized'));
+  socket.data.userId = payload.id;
+  socket.data.role = payload.role;
   next();
 });
 

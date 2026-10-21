@@ -4,15 +4,17 @@ import { ok, fail } from '../utils/response';
 import { EscalationEngine } from '../engines/escalation.engine';
 import { notifyBulk } from '../services/notification.service';
 import { recordAudit } from '../services/audit.service';
+import { alertVisibilityFilter } from '../services/alert-scope.service';
 
 export async function listAlerts(req: Request, res: Response) {
   const { severity, isRead, type } = req.query as Record<string, string>;
+  const user = req.user!;
   const alerts = await prisma.alert.findMany({
     where: {
       severity: severity as never,
       type: type as never,
       isRead: isRead === undefined ? undefined : isRead === 'true',
-      OR: req.user!.role === 'INSTITUTION' ? [{ recipientRole: 'INSTITUTION' }, { recipientId: null }] : undefined,
+      AND: [alertVisibilityFilter(user)],
     },
     include: { application: { select: { applicationNumber: true } } },
     orderBy: { createdAt: 'desc' },
@@ -22,6 +24,13 @@ export async function listAlerts(req: Request, res: Response) {
 }
 
 export async function markRead(req: Request, res: Response) {
+  const user = req.user!;
+  // An alert can only be marked read by someone who can actually see it.
+  const visible = await prisma.alert.findFirst({
+    where: { id: req.params.id, AND: [alertVisibilityFilter(user)] },
+    select: { id: true },
+  });
+  if (!visible) return fail(res, 404, 'Alert not found');
   const alert = await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true } });
   return ok(res, alert);
 }

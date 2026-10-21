@@ -1,10 +1,16 @@
 import { prisma } from '../config/prisma';
 import { NotificationChannel, NotificationStatus } from '../types/domain';
+import { resolveAlertRecipientIds } from './alert-scope.service';
 
-let emitter: { emit: (event: string, payload: unknown) => void } | null = null;
+export interface RealtimeEmitter {
+  emit: (event: string, payload: unknown) => void;
+  to: (room: string) => { emit: (event: string, payload: unknown) => void };
+}
+
+let emitter: RealtimeEmitter | null = null;
 
 /** Register a real-time emitter (Socket.IO) for broadcast events. */
-export function setRealtimeEmitter(io: { emit: (event: string, payload: unknown) => void }) {
+export function setRealtimeEmitter(io: RealtimeEmitter) {
   emitter = io;
 }
 
@@ -55,7 +61,13 @@ export async function notify(params: NotifyParams) {
     },
   });
 
-  emitter?.emit('notification', record);
+  // A notification addressed to one user is delivered to that user's room;
+  // a broadcast is delivered to everyone.
+  if (record.userId) {
+    emitter?.to(`user:${record.userId}`).emit('notification', record);
+  } else {
+    emitter?.emit('notification', record);
+  }
   return record;
 }
 
@@ -107,6 +119,7 @@ export async function createAlert(params: {
   entityId?: string;
   recipientRole?: string;
   recipientId?: string;
+  institutionId?: string | null;
   metadata?: unknown;
 }) {
   const alert = await prisma.alert.create({
@@ -120,10 +133,15 @@ export async function createAlert(params: {
       entityId: params.entityId,
       recipientRole: params.recipientRole ?? null,
       recipientId: params.recipientId ?? null,
+      institutionId: params.institutionId ?? null,
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
     },
   });
 
-  emitter?.emit('alert', alert);
+  // Deliver live only to the users who are entitled to see this alert.
+  const recipientIds = await resolveAlertRecipientIds(alert);
+  for (const id of recipientIds) {
+    emitter?.to(`user:${id}`).emit('alert', alert);
+  }
   return alert;
 }

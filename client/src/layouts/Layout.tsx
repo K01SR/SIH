@@ -47,11 +47,15 @@ export function Layout() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    api
-      .get('/alerts', { params: { isRead: 'false' } })
-      .then((res) => setUnread(res.data.data.length))
-      .catch(() => {});
-    const onAlert = () => setUnread((n) => n + 1);
+    const refreshUnread = () =>
+      api
+        .get('/alerts', { params: { isRead: 'false' } })
+        .then((res) => setUnread(res.data.data.length))
+        .catch(() => {});
+    refreshUnread();
+    // The server only delivers alerts this user is entitled to see, but the
+    // count is re-read rather than incremented so it cannot drift.
+    const onAlert = () => refreshUnread();
     window.addEventListener('aicte:alert', onAlert);
     return () => window.removeEventListener('aicte:alert', onAlert);
   }, []);

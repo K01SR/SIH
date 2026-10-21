@@ -262,6 +262,9 @@ model Alert {
   entityId      String?
   recipientRole String?
   recipientId   String?
+  /// Owning institution, set for alerts raised against an institution's
+  /// documents or undertakings so they can be scoped to that institution.
+  institutionId String?
   isRead        Boolean  @default(false)
   isEscalated   Boolean  @default(false)
   escalatedTo   String?
@@ -274,6 +277,7 @@ model Alert {
   @@index([severity])
   @@index([isRead])
   @@index([createdAt])
+  @@index([institutionId])
 }
 
 model Notification {
