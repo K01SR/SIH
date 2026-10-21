@@ -12,6 +12,6 @@ router.get('/alerts', asyncHandler(evcAlerts));
 router.get('/calendar', asyncHandler(evcCalendar));
 router.post('/queue', authorize('REGIONAL_OFFICER', 'BUREAU_OFFICER'), validate(queueEvcSchema), asyncHandler(queueForEvc));
 router.post('/:id/schedule', authorize('BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN'), validate(scheduleEvcSchema), asyncHandler(scheduleEvc));
-router.post('/:id/complete', authorize('EVC_MEMBER', 'COMMITTEE_MEMBER', 'BUREAU_OFFICER'), asyncHandler(completeEvc));
+router.post('/:id/complete', authorize('EVC_MEMBER', 'COMMITTEE_MEMBER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY', 'ADMIN'), asyncHandler(completeEvc));
 
 export default router;

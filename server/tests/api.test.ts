@@ -106,4 +106,116 @@ describe('API integration', () => {
       .send({ scheduledDate: date, venue: 'HQ', memberIds: [member.id] });
     expect(second.status).toBe(409);
   });
+
+  it('does not let an institution enumerate the staff directory', async () => {
+    await createInstitution();
+    await createUser({ email: 'inst@test.edu', role: 'INSTITUTION' });
+    const token = await login('inst@test.edu');
+    const res = await request(app).get('/api/users').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('does not let an institution read another institution\'s application', async () => {
+    const instA = await createInstitution('Institute A');
+    const instB = await createInstitution('Institute B');
+    await createUser({ email: 'instA@test.edu', role: 'INSTITUTION', institutionId: instA.id });
+    const other = await prisma.application.create({
+      data: {
+        applicationNumber: 'B1', institutionId: instB.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'SUBMITTED', currentStage: 'SCRUTINY',
+      },
+    });
+    const token = await login('instA@test.edu');
+    const res = await request(app)
+      .get(`/api/applications/${other.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('scopes the dashboard to the institution for institution users', async () => {
+    const instA = await createInstitution('Institute A');
+    const instB = await createInstitution('Institute B');
+    await createUser({ email: 'instA@test.edu', role: 'INSTITUTION', institutionId: instA.id });
+    await prisma.application.create({
+      data: {
+        applicationNumber: 'A1', institutionId: instA.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'SUBMITTED', currentStage: 'SCRUTINY',
+      },
+    });
+    await prisma.application.create({
+      data: {
+        applicationNumber: 'B1', institutionId: instB.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'SUBMITTED', currentStage: 'SCRUTINY',
+      },
+    });
+    const token = await login('instA@test.edu');
+    const res = await request(app).get('/api/applications/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.summary.total).toBe(1);
+  });
+
+  it('does not let an institution submit evidence for another institution\'s undertaking', async () => {
+    const instA = await createInstitution('Institute A');
+    const instB = await createInstitution('Institute B');
+    await createUser({ email: 'instA@test.edu', role: 'INSTITUTION', institutionId: instA.id });
+    const otherApp = await prisma.application.create({
+      data: {
+        applicationNumber: 'B1', institutionId: instB.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'APPROVED_WITH_UNDERTAKING', currentStage: 'COMPLETED',
+      },
+    });
+    const undertaking = await prisma.undertaking.create({
+      data: {
+        applicationId: otherApp.id, title: 'Other institution condition',
+        description: 'x', conditions: '{}', dueDate: new Date(),
+      },
+    });
+    const token = await login('instA@test.edu');
+    const list = await request(app).get('/api/undertakings').set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data).toHaveLength(0);
+    const submit = await request(app)
+      .post(`/api/undertakings/${undertaking.id}/submit`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ evidencePath: '/uploads/evidence.pdf' });
+    expect(submit.status).toBe(403);
+  });
+
+  it('rejects a statutory decision applied outside the decision stage', async () => {
+    const inst = await createInstitution();
+    await createUser({ email: 'ca@test.gov', role: 'COMPETENT_AUTHORITY' });
+    const app1 = await prisma.application.create({
+      data: {
+        applicationNumber: 'A1', institutionId: inst.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'UNDER_SCRUTINY', currentStage: 'SCRUTINY',
+      },
+    });
+    const token = await login('ca@test.gov');
+    const res = await request(app)
+      .post(`/api/applications/${app1.id}/transition`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ actionType: 'APPROVE', reason: 'Too early' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('answers 403 when a committee member attempts the statutory decision', async () => {
+    const inst = await createInstitution();
+    await createUser({ email: 'sac@test.gov', role: 'COMMITTEE_MEMBER' });
+    const app1 = await prisma.application.create({
+      data: {
+        applicationNumber: 'A2', institutionId: inst.id, academicYear: '2026-27',
+        programType: 'ENGINEERING', assignedRegion: 'WEST', status: 'PENDING_DECISION', currentStage: 'DECISION',
+      },
+    });
+    const token = await login('sac@test.gov');
+    const res = await request(app)
+      .post(`/api/applications/${app1.id}/transition`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ actionType: 'APPROVE', reason: 'Self approval attempt' });
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    const unchanged = await prisma.application.findUnique({ where: { id: app1.id } });
+    expect(unchanged?.status).toBe('PENDING_DECISION');
+  });
 });

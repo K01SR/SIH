@@ -40,3 +40,17 @@ export const authorize = (...allowedRoles: string[]) =>
     }
     next();
   };
+
+/**
+ * Verifies a bearer token and returns its payload, or null when the token is
+ * absent, malformed or expired. Shared by the HTTP and Socket.IO layers so a
+ * realtime connection can never claim an identity it has not proven.
+ */
+export function verifyToken(token: string | undefined | null): JwtPayload | null {
+  if (!token) return null;
+  try {
+    return jwt.verify(token, env.jwtSecret) as JwtPayload;
+  } catch {
+    return null;
+  }
+}

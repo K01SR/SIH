@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { ok, created, fail } from '../utils/response';
 import { ApplicationService } from '../services/application.service';
-import { WorkflowEngine } from '../engines/workflow.engine';
+import { WorkflowEngine, WorkflowAuthorizationError } from '../engines/workflow.engine';
 import { RulesEngine } from '../engines/rules.engine';
 import { recordAudit } from '../services/audit.service';
 import { NotificationChannel } from '../types/domain';
@@ -41,6 +41,15 @@ export async function getApplication(req: Request, res: Response) {
     },
   });
   if (!app) return fail(res, 404, 'Application not found');
+  // Institutions may only open their own applications; regional officers are
+  // restricted to their own region.
+  const user = req.user!;
+  if (user.role === 'INSTITUTION' && app.institutionId !== user.institutionId) {
+    return fail(res, 403, 'This application does not belong to your institution');
+  }
+  if (user.role === 'REGIONAL_OFFICER' && app.assignedRegion !== user.region) {
+    return fail(res, 403, 'This application is outside your region');
+  }
   return ok(res, app);
 }
 
@@ -91,6 +100,13 @@ export async function transitionApplication(req: Request, res: Response) {
   const { actionType, reason, metadata } = req.body;
   const user = req.user!;
 
+  // Scope the action to the actor's jurisdiction.
+  const target = await prisma.application.findUnique({ where: { id: req.params.id } });
+  if (!target) return fail(res, 404, 'Application not found');
+  if (user.role === 'REGIONAL_OFFICER' && target.assignedRegion !== user.region) {
+    return fail(res, 403, 'This application is outside your region');
+  }
+
   // Human-oversight safeguard: statutory actions require an explicit reason.
   const gated = ['APPROVE', 'REJECT', 'PROPOSE_DECISION'].includes(actionType);
   if (gated && !reason) {
@@ -111,6 +127,9 @@ export async function transitionApplication(req: Request, res: Response) {
     });
     return ok(res, result, 'Transition applied');
   } catch (err) {
+    if (err instanceof WorkflowAuthorizationError) {
+      return fail(res, 403, err.message);
+    }
     return fail(res, 400, (err as Error).message);
   }
 }
@@ -135,6 +154,8 @@ export async function dashboardSummary(req: Request, res: Response) {
   const filter = {
     region: user.role === 'REGIONAL_OFFICER' ? (user.region as never) : undefined,
     officerId: user.role === 'REGIONAL_OFFICER' || user.role === 'BUREAU_OFFICER' ? user.id : undefined,
+    // Institutions only ever see their own case data.
+    institutionId: user.role === 'INSTITUTION' ? user.institutionId! : undefined,
   };
   const [summary, ageing] = await Promise.all([
     ApplicationService.dashboardSummary(filter),
@@ -143,8 +164,14 @@ export async function dashboardSummary(req: Request, res: Response) {
   return ok(res, { summary, ageing });
 }
 
-export async function regionPendency(_req: Request, res: Response) {
-  return ok(res, await ApplicationService.regionPendency());
+export async function regionPendency(req: Request, res: Response) {
+  const user = req.user!;
+  return ok(
+    res,
+    await ApplicationService.regionPendency({
+      institutionId: user.role === 'INSTITUTION' ? user.institutionId! : undefined,
+    })
+  );
 }
 
 export async function workload(_req: Request, res: Response) {
@@ -153,7 +180,13 @@ export async function workload(_req: Request, res: Response) {
 
 export async function predictive(req: Request, res: Response) {
   const days = parseInt((req.query.days as string) ?? '30', 10);
-  return ok(res, await ApplicationService.predictivePendency(days));
+  const user = req.user!;
+  return ok(
+    res,
+    await ApplicationService.predictivePendency(days, {
+      institutionId: user.role === 'INSTITUTION' ? user.institutionId! : undefined,
+    })
+  );
 }
 
 export async function assignOfficer(req: Request, res: Response) {

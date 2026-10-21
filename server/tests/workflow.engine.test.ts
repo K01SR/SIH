@@ -71,6 +71,11 @@ describe('Workflow Engine', () => {
 
   it('marks approval as human-verified and completes the workflow', async () => {
     const { app, officer } = await makeApp();
+    // Advance to the decision stage, where a statutory decision is due.
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'DECISION', status: 'PENDING_DECISION' },
+    });
     const result = await WorkflowEngine.transition({
       applicationId: app.id,
       actionType: ActionType.APPROVE,
@@ -83,6 +88,124 @@ describe('Workflow Engine', () => {
     const updated = await prisma.application.findUnique({ where: { id: app.id } });
     expect(updated?.isHumanVerified).toBe(true);
     expect(updated?.decisionAt).not.toBeNull();
+  });
+
+  it('rejects a statutory decision taken outside the decision stage', async () => {
+    const { app, officer } = await makeApp();
+    await expect(
+      WorkflowEngine.transition({
+        applicationId: app.id,
+        actionType: ActionType.APPROVE,
+        actorId: officer.id,
+        actorRole: 'COMPETENT_AUTHORITY',
+        reason: 'Attempted early approval',
+      })
+    ).rejects.toThrow(/not permitted/i);
+  });
+
+  it('does not allow a closed application to be actioned again', async () => {
+    const { app, officer } = await makeApp();
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'COMPLETED', status: 'APPROVED' },
+    });
+    await expect(
+      WorkflowEngine.transition({
+        applicationId: app.id,
+        actionType: ActionType.RETURN,
+        actorId: officer.id,
+        actorRole: 'REGIONAL_OFFICER',
+        reason: 'Should be rejected',
+      })
+    ).rejects.toThrow(/already/i);
+  });
+
+  it('advances from the EVC stage to the decision stage once the EVC is complete', async () => {
+    const { app, officer } = await makeApp('SCRUTINY_EVC');
+    // The EVC has concluded; the file now sits at the EVC stage awaiting progression.
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'EVC', status: 'EVC_COMPLETED' },
+    });
+    const result = await WorkflowEngine.transition({
+      applicationId: app.id,
+      actionType: ActionType.AUTO_ADVANCE,
+      actorId: officer.id,
+      actorRole: 'BUREAU_OFFICER',
+    });
+    expect(result.toStage).toBe('DECISION');
+  });
+
+  it('rejects progression out of the EVC stage for actions that belong to scrutiny', async () => {
+    const { app, officer } = await makeApp('SCRUTINY_EVC');
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'EVC', status: 'EVC_COMPLETED' },
+    });
+    await expect(
+      WorkflowEngine.transition({
+        applicationId: app.id,
+        actionType: ActionType.SCRUTINY_PASS,
+        actorId: officer.id,
+        actorRole: 'REGIONAL_OFFICER',
+      })
+    ).rejects.toThrow(/not permitted/i);
+  });
+
+  it('does not let a committee member take the statutory decision', async () => {
+    const { app } = await makeApp();
+    const member = await createUser({ email: 'sac@test.gov', role: 'COMMITTEE_MEMBER' });
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'DECISION', status: 'PENDING_DECISION' },
+    });
+    await expect(
+      WorkflowEngine.transition({
+        applicationId: app.id,
+        actionType: ActionType.APPROVE,
+        actorId: member.id,
+        actorRole: 'COMMITTEE_MEMBER',
+        reason: 'Attempting to self-approve',
+      })
+    ).rejects.toThrow(/not authorised/i);
+  });
+
+  it('does not let an EVC member take the statutory decision', async () => {
+    const { app } = await makeApp();
+    const member = await createUser({ email: 'evc@test.gov', role: 'EVC_MEMBER' });
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'DECISION', status: 'PENDING_DECISION' },
+    });
+    await expect(
+      WorkflowEngine.transition({
+        applicationId: app.id,
+        actionType: ActionType.REJECT,
+        actorId: member.id,
+        actorRole: 'EVC_MEMBER',
+        reason: 'Attempting to self-reject',
+      })
+    ).rejects.toThrow(/not authorised/i);
+  });
+
+  it('lets a committee member propose a recommendation without deciding the case', async () => {
+    const { app } = await makeApp();
+    const member = await createUser({ email: 'sac2@test.gov', role: 'COMMITTEE_MEMBER' });
+    await prisma.application.update({
+      where: { id: app.id },
+      data: { currentStage: 'DECISION', status: 'PENDING_DECISION' },
+    });
+    const result = await WorkflowEngine.transition({
+      applicationId: app.id,
+      actionType: ActionType.PROPOSE_DECISION,
+      actorId: member.id,
+      actorRole: 'COMMITTEE_MEMBER',
+      reason: 'Panel recommendation: approve with conditions',
+    });
+    expect(result.requiresHumanConfirmation).toBe(true);
+    expect(result.toStatus).not.toBe('APPROVED');
+    const updated = await prisma.application.findUnique({ where: { id: app.id } });
+    expect(updated?.status).toBe('PENDING_DECISION');
   });
 
   it('records an immutable workflow action for every transition', async () => {
