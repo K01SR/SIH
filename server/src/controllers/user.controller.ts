@@ -7,7 +7,9 @@ export async function listUsers(req: Request, res: Response) {
   const user = req.user!;
   const users = await prisma.user.findMany({
     where: {
-      role: role,
+      // Without an explicit filter the directory is staff-only; institution
+      // accounts are only visible to those who manage them.
+      role: role ?? { not: 'INSTITUTION' },
       region: region ?? (user.role === 'REGIONAL_OFFICER' ? user.region ?? undefined : undefined),
       isActive: true,
     },

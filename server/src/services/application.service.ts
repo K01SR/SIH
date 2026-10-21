@@ -9,6 +9,7 @@ export interface PendencyFilter {
   stage?: Stage;
   status?: ApplicationStatus;
   officerId?: string;
+  institutionId?: string;
 }
 
 export class ApplicationService {
@@ -19,6 +20,7 @@ export class ApplicationService {
         currentStage: filter.stage,
         status: filter.status,
         assignedOfficerId: filter.officerId,
+        institutionId: filter.institutionId,
       },
       include: {
         institution: true,
@@ -34,6 +36,7 @@ export class ApplicationService {
       where: {
         assignedRegion: filter.region,
         currentStage: filter.stage,
+        institutionId: filter.institutionId,
         status: { notIn: ['APPROVED', 'REJECTED', 'WITHDRAWN'] },
       },
       select: { id: true, createdAt: true, currentStage: true, assignedRegion: true, status: true },
@@ -58,9 +61,12 @@ export class ApplicationService {
   }
 
   /** Region-wise pendency breakdown. */
-  static async regionPendency() {
+  static async regionPendency(filter: PendencyFilter = {}) {
     const apps = await prisma.application.findMany({
-      where: { status: { notIn: ['APPROVED', 'REJECTED', 'WITHDRAWN'] } },
+      where: {
+        status: { notIn: ['APPROVED', 'REJECTED', 'WITHDRAWN'] },
+        institutionId: filter.institutionId,
+      },
       select: { assignedRegion: true, isBreached: true, currentStage: true },
     });
     const map: Record<string, { total: number; breached: number; byStage: Record<string, number> }> = {};
@@ -98,13 +104,15 @@ export class ApplicationService {
   }
 
   /** Simple predictive pendency: forecast breaches within the next N days. */
-  static async predictivePendency(withinDays = 30) {
+  static async predictivePendency(withinDays = 30, filter: PendencyFilter = {}) {
     const now = Date.now();
     const horizon = now + withinDays * DAY_MS;
     const apps = await prisma.application.findMany({
       where: {
         status: { notIn: ['APPROVED', 'REJECTED', 'WITHDRAWN'] },
         slaDueAt: { not: null, lte: new Date(horizon) },
+        assignedRegion: filter.region,
+        institutionId: filter.institutionId,
       },
       include: { institution: true },
       orderBy: { slaDueAt: 'asc' },
@@ -128,6 +136,7 @@ export class ApplicationService {
     const where = {
       assignedRegion: filter.region,
       assignedOfficerId: filter.officerId,
+      institutionId: filter.institutionId,
     };
     const [total, pending, breached, approved, rejected] = await Promise.all([
       prisma.application.count({ where }),
