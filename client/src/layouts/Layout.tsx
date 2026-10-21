@@ -67,6 +67,13 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen">
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+        />
+      )}
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
@@ -107,7 +114,12 @@ export function Layout() {
 
       <div className="flex flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-8">
-          <button className="lg:hidden" onClick={() => setOpen((v) => !v)}>
+          <button
+            className="lg:hidden"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle navigation menu"
+            aria-expanded={open}
+          >
             <Menu size={22} />
           </button>
           <div className="hidden text-sm text-slate-500 lg:block">
@@ -118,8 +130,11 @@ export function Layout() {
               title={connected ? 'Real-time connected' : 'Real-time disconnected'}
               className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-500"
             >
-              <span className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-slate-300'}`} />
+              <span className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-slate-300'}`} aria-hidden="true" />
               {connected ? 'Live' : 'Offline'}
+              <span className="sr-only">
+                {connected ? 'Real-time connection active' : 'Real-time connection offline'}
+              </span>
             </span>
             <div className="text-right">
               <p className="text-sm font-semibold text-slate-800">{user.fullName}</p>
@@ -131,6 +146,7 @@ export function Layout() {
             <button
               onClick={handleLogout}
               title="Logout"
+              aria-label="Logout"
               className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600"
             >
               <LogOut size={18} />

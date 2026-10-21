@@ -12,7 +12,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { AlertTriangle, Clock, FileCheck2, FileText, Layers } from 'lucide-react';
-import { api } from '../api/client';
+import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Card, PageHeader, Spinner, StatCard, Badge } from '../components/ui';
 import { humanize } from '../utils';
@@ -33,8 +33,11 @@ export function DashboardPage() {
     { applicationNumber: string; institution: string; daysRemaining: number; risk: string; stage: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError('');
     Promise.all([
       api.get('/applications/dashboard'),
       api.get('/applications/analytics/regions'),
@@ -45,11 +48,33 @@ export function DashboardPage() {
         setRegions(r.data.data);
         setPredictive(p.data.data.slice(0, 6));
       })
+      .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) return <Spinner />;
-  if (!data) return null;
+  if (error || !data) {
+    return (
+      <div>
+        <PageHeader title="Dashboard" subtitle="Real-time pendency, SLA status and workload overview" />
+        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <AlertTriangle className="text-red-500" size={32} />
+          <p className="text-sm text-slate-600">{error || 'Unable to load dashboard data.'}</p>
+          <button
+            onClick={load}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </Card>
+      </div>
+    );
+  }
 
   const isInstitution = user?.role === 'INSTITUTION';
   const ageingChart = data.ageing.buckets.map((b) => ({ name: b.label, count: b.count, color: BUCKET_COLORS[b.color] }));

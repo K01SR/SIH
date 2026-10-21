@@ -3,9 +3,13 @@ import { humanize, STATUS_COLORS } from '../utils';
 
 export function Badge({ value, className = '' }: { value?: string | null; className?: string }) {
   const color = STATUS_COLORS[value ?? ''] ?? 'bg-slate-100 text-slate-700';
+  const label = humanize(value);
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${color} ${className}`}>
-      {humanize(value)}
+    <span
+      aria-label={label}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${color} ${className}`}
+    >
+      {label}
     </span>
   );
 }
@@ -53,8 +57,9 @@ export function EmptyState({ message }: { message: string }) {
 
 export function Spinner() {
   return (
-    <div className="flex items-center justify-center py-14">
+    <div role="status" aria-live="polite" className="flex items-center justify-center py-14">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+      <span className="sr-only">Loading…</span>
     </div>
   );
 }
