@@ -101,8 +101,9 @@ npm run build        # production build of the client
 npm --prefix server test   # backend test suite (vitest)
 ```
 
-The backend test suite covers the workflow engine, escalation engine and the REST
-API (auth, RBAC, validation, routing, EVC conflict detection) — 17 tests.
+The backend test suite covers the workflow engine, escalation engine, alert
+scoping and the REST API (auth, RBAC, validation, routing, EVC conflict
+detection, data-leak and privilege-escalation regressions) — 35 tests.
 
 ---
 

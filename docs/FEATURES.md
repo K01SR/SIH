@@ -53,7 +53,7 @@ Legend: **✅** implemented · **🟡** partially / simplified for prototype
 | # | Requirement | Status | Where |
 |---|---|---|---|
 | 24 | Configurable rules/timelines aligned to APH (rules as data, not code) | ✅ | `RuleConfig` versioned JSON + `RulesPage` |
-| 25 | RBAC + secure document storage + confidentiality + integration-ready API | ✅ | `authorize` middleware, multer file storage (`/uploads`), REST API + rate limiting |
+| 25 | RBAC + secure document storage + confidentiality + integration-ready API | ✅ | `authorize` middleware, per-action role matrix in `WorkflowEngine`, multer file storage (`/uploads`), REST API + rate limiting |
 
 ## Evaluation-Criteria Differentiators
 | # | Capability | Status | Where |
@@ -75,8 +75,10 @@ Legend: **✅** implemented · **🟡** partially / simplified for prototype
 | Input validation (Zod schemas, structured 422 errors) | ✅ | `middleware/validate.ts`, `validation/schemas.ts` |
 | Centralized typed error handling | ✅ | `utils/AppError.ts`, `middleware/error.ts` |
 | Readiness health check (DB ping, uptime) | ✅ | `GET /api/health` |
-| Real-time alerts over Socket.IO (per-user rooms) | ✅ | `index.ts`, `RealtimeContext`, `RealtimeProvider` |
-| Automated test suite (engines + API integration) | ✅ | `server/tests/*` (vitest + supertest) |
+| Real-time alerts over Socket.IO (per-user rooms, token-verified handshake) | ✅ | `index.ts`, `middleware/auth.ts` (`verifyToken`), `RealtimeContext`, `RealtimeProvider` |
+| Alert visibility scoped to role, region and institution | ✅ | `services/alert-scope.service.ts` (`alertVisibilityFilter`, `resolveAlertRecipientIds`) |
+| Workflow authority matrix (per-action role guards + stage guards) | ✅ | `engines/workflow.engine.ts` (`ACTION_ROLE_GUARDS`, `ACTION_STAGE_GUARDS`) |
+| Automated test suite (engines + API integration + scoping regressions) | ✅ | `server/tests/*` (vitest + supertest) |
 | Containerization + orchestration | ✅ | `server/Dockerfile`, `client/Dockerfile`, `docker-compose.yml` |
 | CI (typecheck, tests, build on push/PR) | ✅ | `.github/workflows/ci.yml` |
 | Client code-splitting + error boundary | ✅ | `App.tsx` (lazy routes), `components/ErrorBoundary.tsx` |
