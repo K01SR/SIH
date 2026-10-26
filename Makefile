@@ -1,4 +1,4 @@
-.PHONY: help install setup dev build test typecheck docker-build docker-up docker-down docker-logs
+.PHONY: help install setup dev build test typecheck docker-build docker-up docker-down docker-logs docker-status docker-reset
 
 help:
 	@echo "AICTE Workflow (SIH 26262) — available targets:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make docker-up     Start the full stack via docker compose (:8080)"
 	@echo "  make docker-down   Stop the stack"
 	@echo "  make docker-logs   Tail stack logs"
+	@echo "  make docker-status Show container health and ports"
+	@echo "  make docker-reset  Remove containers and volumes (destructive)"
 
 install:
 	npm run install:all
@@ -42,3 +44,9 @@ docker-down:
 
 docker-logs:
 	docker compose logs -f
+
+docker-status:
+	docker compose ps
+
+docker-reset:
+	docker compose down -v

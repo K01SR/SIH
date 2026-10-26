@@ -112,15 +112,32 @@ detection, data-leak and privilege-escalation regressions) — 35 tests.
 Run the full stack (client served by nginx on :8080, API on :4000) with one command:
 
 ```bash
-cp .env.example .env         # set a strong JWT_SECRET
-docker compose up -d --build # or: make docker-up
+cp .env.example .env          # set a strong JWT_SECRET
+docker compose up -d --build  # or: make docker-up
+docker compose ps             # or: make docker-status
 ```
 
-The server container applies the schema and seeds demo data on first start
-(`SEED_ON_START=true`). Data and uploaded files persist in named volumes.
-Visit http://localhost:8080.
+Visit http://localhost:8080. The browser talks to `/api`, `/uploads` and
+`/socket.io` through nginx, so no separate API URL is needed in the client build.
 
-Build images only: `make docker-build`. Stop: `make docker-down`.
+The server container applies the Prisma schema on start, then seeds demo data only
+when the database has no users (`SEED_ON_START=true`). Existing data is preserved
+across restarts. Set `SEED_FORCE=true` once to wipe and reseed, or remove all
+containers and volumes with `make docker-reset` (destructive). SQLite data and
+uploaded files persist in the `aicte_data` and `aicte_uploads` volumes.
+
+Change host ports in `.env` if 8080/4000 are occupied. If you change
+`CLIENT_PORT`, update `CLIENT_URL` to match, otherwise browser CORS and
+Socket.IO connections will be rejected:
+
+```bash
+CLIENT_PORT=8090
+CLIENT_URL=http://localhost:8090
+SERVER_PORT=4010
+```
+
+Build images only: `make docker-build`. Stop without deleting data:
+`make docker-down`. Follow logs: `make docker-logs`.
 
 ---
 
