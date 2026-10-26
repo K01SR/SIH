@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
 import { Server as SocketServer } from 'socket.io';
 import { env } from './config/env';
 import routes from './routes';
@@ -49,6 +51,34 @@ app.use('/api', apiLimiter, routes);
 
 // Serve uploaded documents statically for download/preview.
 app.use('/uploads', express.static(uploadRoot, { maxAge: '1h', index: false }));
+
+// Single-container deployment: serve the built client from the same origin so
+// /api, /uploads and /socket.io all work without a reverse proxy.
+const clientDist = path.resolve(process.env.CLIENT_DIST || path.join(process.cwd(), 'client-dist'));
+if (fs.existsSync(clientDist)) {
+  app.use(
+    express.static(clientDist, {
+      index: false,
+      maxAge: env.isProduction ? '1y' : 0,
+      immutable: env.isProduction,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+      },
+    })
+  );
+
+  app.get('*', (req, res, next) => {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/uploads') ||
+      req.path.startsWith('/socket.io')
+    ) {
+      return next();
+    }
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 app.use(notFound);
 app.use(errorHandler);

@@ -2,7 +2,7 @@
 set -e
 
 echo "[entrypoint] applying database schema..."
-npx prisma db push --skip-generate --accept-data-loss
+./node_modules/.bin/prisma db push --skip-generate --accept-data-loss
 
 if [ "${SEED_ON_START:-false}" = "true" ]; then
   should_seed="false"

@@ -139,6 +139,34 @@ SERVER_PORT=4010
 Build images only: `make docker-build`. Stop without deleting data:
 `make docker-down`. Follow logs: `make docker-logs`.
 
+### Single-container deployment (Render)
+
+The root [`Dockerfile`](Dockerfile) builds the client and server into **one image**.
+Express serves the SPA, `/api`, `/uploads` and `/socket.io` from the same origin, so no
+nginx container or `CLIENT_URL` is required. The included [`render.yaml`](render.yaml)
+defines a Render Docker web service with a persistent disk mounted at `/app/data`.
+
+Run the single image locally:
+
+```bash
+docker build -t aicte-workflow .
+docker run --rm -p 4000:4000 \
+  -e JWT_SECRET='replace-with-a-strong-secret' \
+  -e SEED_ON_START=true \
+  -v aicte_runtime_data:/app/data \
+  aicte-workflow
+```
+
+Open **http://localhost:4000**. The container applies the Prisma schema on start and
+seeds demo users only when the database is empty. Set `SEED_FORCE=true` once to reset
+the database. SQLite data and uploads live under `/app/data`; on Render, attach the
+disk declared in `render.yaml` so they survive deploys. The service respects Render's
+`PORT` and derives its public URL from `RENDER_EXTERNAL_URL` when `CLIENT_URL` is unset.
+
+To deploy with the blueprint, connect the repository in Render and create a new
+Blueprint; otherwise create a Docker web service pointing at the repository root. Use
+`/api/health` as the health check and mount a disk at `/app/data` (at least 1 GB).
+
 ---
 
 ## 7. Security & Operations

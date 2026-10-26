@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: aicte-workflow
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: DATABASE_URL
+        value: file:/app/data/prod.db
+      - key: UPLOAD_DIR
+        value: /app/data/uploads
+      - key: SEED_ON_START
+        value: "true"
+      - key: SEED_FORCE
+        value: "false"
+      - key: ENABLE_SCHEDULER
+        value: "true"
+    disk:
+      name: aicte-data
+      mountPath: /app/data
+      sizeGB: 1

@@ -27,7 +27,8 @@ export const env = {
   databaseUrl: required('DATABASE_URL', 'file:./dev.db'),
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl:
+    process.env.CLIENT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173',
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   escalationCron: process.env.ESCALATION_CRON || '*/5 * * * *',
   enableScheduler: process.env.ENABLE_SCHEDULER !== 'false',
