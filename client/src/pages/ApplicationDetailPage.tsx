@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ShieldAlert, History, FileDown, FileQuestion } from 'lucide-react';
+import { ArrowLeft, ShieldAlert, FileDown, FileQuestion, History } from 'lucide-react';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge, Card, PageHeader, Spinner } from '../components/ui';
+import { Badge, Button, Field, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { WorkflowStepper } from '../components/WorkflowStepper';
-import { Modal, Field } from './ApplicationsPage';
-import { formatDateTime, humanize } from '../utils';
+import { Modal } from '../components/Modal';
+import { formatDateTime, humanize, daysUntil, formatDate } from '../utils';
 import type { Application, WorkflowAction } from '../types';
 
 interface ActionDef {
   action: string;
   label: string;
-  style: string;
   gated: boolean;
   reasonRequired?: boolean;
+  tone?: 'primary' | 'danger';
 }
 
 export function ApplicationDetailPage() {
@@ -74,26 +74,26 @@ export function ApplicationDetailPage() {
     }
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Opening case file" />;
   if (!app) {
     return (
       <div>
         <button
           onClick={() => navigate('/applications')}
-          className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+          className="link-underline mb-6 inline-flex items-center gap-1.5 label text-muted"
         >
-          <ArrowLeft size={16} /> Back to Applications
+          <ArrowLeft size={13} /> Back to register
         </button>
-        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <FileQuestion className="text-slate-400" size={32} />
-          <p className="text-sm text-slate-600">This application could not be found or is no longer available.</p>
-          <button
-            onClick={() => navigate('/applications')}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-          >
+        <div className="flex flex-col items-center justify-center border border-gray-200 px-6 py-16 text-center">
+          <FileQuestion className="mb-4 text-muted" size={28} />
+          <p className="label text-ink-2">Case file unavailable</p>
+          <p className="mt-2 max-w-sm text-[11px] text-muted">
+            This application could not be found or is outside your scope.
+          </p>
+          <Button className="mt-5" onClick={() => navigate('/applications')}>
             View all applications
-          </button>
-        </Card>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -102,40 +102,36 @@ export function ApplicationDetailPage() {
   const stage = app.currentStage;
   const status = app.status;
   const actions: ActionDef[] = [];
-
-  // A closed case cannot be actioned further.
   const isClosed = ['APPROVED', 'APPROVED_WITH_UNDERTAKING', 'REJECTED', 'WITHDRAWN'].includes(status);
+  const d = daysUntil(app.slaDueAt);
 
   if (!isClosed) {
-    // Scrutiny actions are only meaningful before the decision stage.
     const inScrutiny = ['SUBMISSION', 'SCRUTINY', 'RESCRUTINY'].includes(stage);
     if (inScrutiny) {
       if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-        actions.push({ action: 'SCRUTINY_PASS', label: 'Pass Scrutiny / Advance Stage', style: 'bg-blue-600', gated: false });
+        actions.push({ action: 'SCRUTINY_PASS', label: 'Pass Scrutiny / Advance Stage', gated: false, tone: 'primary' });
       }
       if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', gated: false, reasonRequired: true });
       }
-      // Routing to EVC is restricted to regional/bureau officers by the server.
       if (['REGIONAL_OFFICER', 'BUREAU_OFFICER'].includes(role ?? '')) {
-        actions.push({ action: 'ROUTE_TO_EVC', label: 'Route to EVC', style: 'bg-purple-600', gated: false });
+        actions.push({ action: 'ROUTE_TO_EVC', label: 'Route to EVC', gated: false });
       }
     } else if (['EVC', 'SAC_SHC'].includes(stage)) {
       if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-        actions.push({ action: 'AUTO_ADVANCE', label: 'Advance Stage', style: 'bg-blue-600', gated: false });
-        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+        actions.push({ action: 'AUTO_ADVANCE', label: 'Advance Stage', gated: false, tone: 'primary' });
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', gated: false, reasonRequired: true });
       }
     } else if (stage === 'DECISION') {
       if (['COMPETENT_AUTHORITY', 'BUREAU_OFFICER'].includes(role ?? '')) {
-        actions.push({ action: 'APPROVE', label: 'Approve (Statutory)', style: 'bg-green-600', gated: true });
-        actions.push({ action: 'REJECT', label: 'Reject (Statutory)', style: 'bg-red-600', gated: true });
+        actions.push({ action: 'APPROVE', label: 'Approve (Statutory)', gated: true, tone: 'primary' });
+        actions.push({ action: 'REJECT', label: 'Reject (Statutory)', gated: true, tone: 'danger' });
       }
-      // Committee and EVC members may recommend an outcome but never take it.
       if (['COMMITTEE_MEMBER', 'EVC_MEMBER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-        actions.push({ action: 'PROPOSE_DECISION', label: 'Propose Recommendation', style: 'bg-indigo-600', gated: true });
+        actions.push({ action: 'PROPOSE_DECISION', label: 'Propose Recommendation', gated: true });
       }
       if (['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(role ?? '')) {
-        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', style: 'bg-amber-600', gated: false, reasonRequired: true });
+        actions.push({ action: 'RETURN', label: 'Return for Deficiencies', gated: false, reasonRequired: true });
       }
     }
   }
@@ -167,46 +163,10 @@ export function ApplicationDetailPage() {
   const downloadCaseFile = async () => {
     setExporting(true);
     try {
-      const { default: jsPDF } = await import('jspdf');
-      const doc = new jsPDF();
-      let y = 20;
-      doc.setFontSize(16);
-      doc.text('AICTE - Case File Summary', 14, y);
-      y += 10;
-      doc.setFontSize(11);
-      const line = (label: string, value: string) => {
-        doc.text(`${label}: ${value}`, 14, y);
-        y += 7;
-      };
-      line('Application No', app.applicationNumber);
-      line('Institution', app.institution?.name ?? '—');
-      line('Region', humanize(app.assignedRegion));
-      line('Program', humanize(app.programType));
-      line('Status', humanize(app.status));
-      line('Current Stage', humanize(app.currentStage));
-      line('Route', humanize(app.routeType));
-      line('SLA Due', formatDateTime(app.slaDueAt));
-      y += 4;
-      doc.setFontSize(13);
-      doc.text('Workflow History', 14, y);
-      y += 8;
-      doc.setFontSize(10);
-      (app.actions ?? []).forEach((a) => {
-        if (y > 275) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(
-          `${formatDateTime(a.createdAt)} - ${humanize(a.actionType)} (${humanize(a.fromStage ?? '')} -> ${humanize(a.toStage ?? '')})${a.reason ? ' | ' + a.reason : ''}`,
-          14,
-          y
-        );
-        y += 6;
-      });
-      y += 4;
-      doc.setFontSize(8);
-      doc.text('Generated by AICTE Approval Workflow Automation System', 14, y);
-      doc.save(`${app.applicationNumber.replace(/\//g, '-')}.pdf`);
+      const { downloadCaseFilePdf } = await import('../pdf/caseFilePdf');
+      const generatedBy = user ? `${user.fullName} (${humanize(user.role)})` : 'Authorised user';
+      downloadCaseFilePdf(app, generatedBy);
+      push('Case file exported');
     } catch (err) {
       push(apiError(err), 'error');
     } finally {
@@ -216,177 +176,229 @@ export function ApplicationDetailPage() {
 
   return (
     <div>
-      <button onClick={() => navigate(-1)} className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft size={16} /> Back
+      <button
+        onClick={() => navigate(-1)}
+        className="link-underline mb-6 inline-flex items-center gap-1.5 label text-muted"
+      >
+        <ArrowLeft size={13} /> Back
       </button>
+
       <PageHeader
+        eyebrow="Case file"
         title={app.applicationNumber}
-        subtitle={`${app.institution?.name} · ${humanize(app.assignedRegion)} Region`}
+        subtitle={`${app.institution?.name ?? '—'} · ${humanize(app.assignedRegion)} Region · ${humanize(app.programType)}`}
         actions={
-          <button
-            onClick={downloadCaseFile}
-            disabled={exporting}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            <FileDown size={16} /> {exporting ? 'Generating…' : 'Export Case File (PDF)'}
-          </button>
+          <Button icon={<FileDown size={13} />} onClick={downloadCaseFile} loading={exporting}>
+            {exporting ? 'Generating' : 'Export Case File'}
+          </Button>
         }
       />
 
-      <Card className="mb-6">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+      <section className="mb-6 rounded-[5px] border border-line bg-panel">
+        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-5 py-3">
           <Badge value={app.status} />
-          {app.isBreached && <span className="rounded-full bg-red-100 px-3 py-0.5 text-xs font-semibold text-red-700">SLA BREACHED</span>}
-          {app.isHumanVerified && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-0.5 text-xs font-semibold text-green-700">
-              <ShieldAlert size={12} /> Human Verified
+          {app.isBreached && (
+            <span className="label-sm border border-pigment/50 px-1.5 py-0.5 text-pigment">
+              SLA Breached
             </span>
           )}
+          {app.isHumanVerified && (
+            <span className="label-sm inline-flex items-center gap-1 border border-hairline-strong px-1.5 py-0.5 text-ink">
+              <ShieldAlert size={10} /> Human Verified
+            </span>
+          )}
+          <span className="ml-auto label-sm text-muted">
+            {d === null
+              ? 'SLA —'
+              : d < 0
+                ? `${Math.abs(d)} days overdue`
+                : `${d} days remaining`}
+            {' · due '}
+            {formatDate(app.slaDueAt)}
+          </span>
         </div>
-        <WorkflowStepper currentStage={app.currentStage} />
-      </Card>
+        <div className="overflow-x-auto px-5 py-5">
+          <WorkflowStepper currentStage={app.currentStage} />
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Application Details</h3>
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <Detail label="Academic Year" value={app.academicYear} />
-            <Detail label="Program Type" value={humanize(app.programType)} />
-            <Detail label="Processing Route" value={humanize(app.routeType)} />
-            <Detail label="Assigned Officer" value={app.assignedOfficer?.fullName ?? 'Unassigned'} />
-            <Detail label="Submitted" value={formatDateTime(app.submittedAt)} />
-            <Detail label="SLA Due" value={formatDateTime(app.slaDueAt)} />
-          </dl>
-          {app.remarks && (
-            <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-              <span className="font-semibold">Remarks: </span>
-              {app.remarks}
+        <section className="lg:col-span-2">
+          <div className="rounded-[5px] border border-line bg-panel">
+            <div className="border-b border-gray-100 px-5 py-4">
+              <p className="label text-pigment">Record</p>
+              <h2 className="mt-1 text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">Application details</h2>
             </div>
-          )}
-          {canAssign && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <label className="mb-1 block text-xs font-medium uppercase text-slate-400">
-                Assigned Officer
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={app.assignedOfficerId ?? ''}
-                  onChange={(e) => assignOfficer(e.target.value)}
-                  disabled={assigning}
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:opacity-60"
+            <dl className="grid grid-cols-1 sm:grid-cols-2">
+              {[
+                ['Academic year', app.academicYear],
+                ['Program type', humanize(app.programType)],
+                ['Processing route', humanize(app.routeType)],
+                ['Assigned officer', app.assignedOfficer?.fullName ?? 'Unassigned'],
+                ['Submitted', formatDateTime(app.submittedAt)],
+                ['SLA due', formatDateTime(app.slaDueAt)],
+              ].map(([label, value], i) => (
+                <div
+                  key={label}
+                  className={`px-5 py-4 ${i % 2 === 0 ? 'sm:border-r' : ''} ${
+                    i < 2 ? 'border-b' : i % 2 === 0 ? 'sm:border-b' : ''
+                  } border-hairline`}
                 >
-                  <option value="">Unassigned</option>
-                  {officers.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.fullName} ({humanize(o.role)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {assigning && <p className="mt-1 text-xs text-slate-400">Saving assignment…</p>}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Actions</h3>
-          {actions.length === 0 ? (
-            <p className="text-sm text-slate-400">No actions available for your role.</p>
-          ) : (
-            <div className="space-y-2">
-              {actions.map((a) => (
-                <button
-                  key={a.action}
-                  onClick={() => {
-                    setModal(a);
-                    setReason('');
-                  }}
-                  className={`w-full rounded-lg ${a.style} px-3 py-2 text-sm font-semibold text-white hover:opacity-90`}
-                >
-                  {a.gated && <ShieldAlert size={13} className="mr-1 inline" />}
-                  {a.label}
-                </button>
+                  <dt className="label-sm text-muted">{label}</dt>
+                  <dd className="mt-1 text-[12px] text-ink">{value}</dd>
+                </div>
               ))}
+            </dl>
+            {app.remarks && (
+              <div className="border-t border-gray-100 px-5 py-4">
+                <p className="label-sm text-pigment">Remarks</p>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">{app.remarks}</p>
+              </div>
+            )}
+            {canAssign && (
+              <div className="border-t border-gray-100 px-5 py-4">
+                <Field label="Assign officer" hint="Only regional, bureau and competent-authority officers are listed.">
+                  <Select
+                    value={app.assignedOfficerId ?? ''}
+                    onChange={(e) => assignOfficer(e.target.value)}
+                    disabled={assigning}
+                  >
+                    <option value="">Unassigned</option>
+                    {officers.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.fullName} ({humanize(o.role)})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {assigning && <p className="mt-1 label-sm text-muted">Saving assignment…</p>}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside>
+          <div className="rounded-[5px] border border-line bg-panel">
+            <div className="border-b border-gray-100 px-5 py-4">
+              <p className="label text-pigment">Actions</p>
+              <h2 className="mt-1 text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">Available to you</h2>
             </div>
-          )}
-        </Card>
+            <div className="p-5">
+              {actions.length === 0 ? (
+                <p className="text-[11px] leading-relaxed text-muted">
+                  No actions are available for your role at this stage.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {actions.map((a) => (
+                    <Button
+                      key={a.action}
+                      variant={a.tone === 'danger' ? 'danger' : a.tone === 'primary' ? 'primary' : 'secondary'}
+                      className="w-full justify-start"
+                      icon={a.gated ? <ShieldAlert size={12} /> : undefined}
+                      onClick={() => {
+                        setModal(a);
+                        setReason('');
+                      }}
+                    >
+                      {a.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <p className="mt-5 border-t border-gray-100 pt-4 text-[10px] leading-relaxed text-muted">
+                Statutory decisions require a recorded reason and are written to the immutable audit trail.
+              </p>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      <Card className="mt-6">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <History size={16} /> Workflow &amp; Audit Timeline
-        </h3>
-        <div className="space-y-3">
-          {(app.actions ?? []).length === 0 && <p className="text-sm text-slate-400">No history yet.</p>}
-          {(app.actions ?? []).map((a: WorkflowAction) => (
-            <div key={a.id} className="flex gap-3">
-              <div className="flex flex-col items-center">
-                <div className={`h-2.5 w-2.5 rounded-full ${a.isAutomated ? 'bg-purple-500' : 'bg-blue-500'}`} />
-                <div className="mt-1 w-px flex-1 bg-slate-200" />
-              </div>
-              <div className="pb-3">
-                <p className="text-sm font-medium text-slate-800">
-                  {humanize(a.actionType)}
-                  {a.isAutomated && <span className="ml-2 text-xs text-purple-600">automated</span>}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {humanize(a.fromStage ?? '')} → {humanize(a.toStage ?? '')} · {a.actor?.fullName ?? 'System'} ·{' '}
-                  {formatDateTime(a.createdAt)}
-                </p>
-                {a.reason && <p className="mt-1 text-xs text-slate-600">Reason: {a.reason}</p>}
-              </div>
-            </div>
-          ))}
+      <section className="mt-6 rounded-[5px] border border-line bg-panel">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <p className="label text-pigment">Chronology</p>
+            <h2 className="mt-1 text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">Workflow &amp; audit timeline</h2>
+          </div>
+          <History size={16} className="text-muted" />
         </div>
-      </Card>
+        <div className="px-5 py-5">
+          {(app.actions ?? []).length === 0 && (
+            <p className="text-[11px] text-muted">No history recorded yet.</p>
+          )}
+          <ol className="relative">
+            {(app.actions ?? []).map((a: WorkflowAction, i) => (
+              <li key={a.id} className="relative flex gap-4 pb-6 last:pb-0">
+                <div className="flex flex-col items-center">
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1 h-2 w-2 shrink-0 ${
+                      a.isAutomated ? 'bg-pigment' : 'bg-ink'
+                    }`}
+                  />
+                  {i < (app.actions ?? []).length - 1 && (
+                    <span className="mt-1 w-px flex-1 bg-gray-200" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="min-w-0 pb-1">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <p className="text-[12px] font-medium text-ink">{humanize(a.actionType)}</p>
+                    {a.isAutomated && <span className="label-sm text-pigment">Automated</span>}
+                    <span className="label-sm text-muted">{formatDateTime(a.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 text-[10.5px] text-muted">
+                    {humanize(a.fromStage ?? '')} → {humanize(a.toStage ?? '')} · {a.actor?.fullName ?? 'System'}
+                  </p>
+                  {a.reason && (
+                    <p className="mt-1.5 border-l border-pigment pl-2 text-[11px] leading-relaxed text-ink-2">
+                      {a.reason}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
 
       {modal && (
-        <Modal title={modal.gated ? 'Human Oversight Confirmation Required' : 'Confirm Action'} onClose={() => setModal(null)}>
+        <Modal
+          title={modal.gated ? 'Human oversight required' : 'Confirm action'}
+          eyebrow={modal.gated ? 'Statutory step' : 'Workflow step'}
+          onClose={() => setModal(null)}
+        >
           {modal.gated && (
-            <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-              <ShieldAlert size={18} className="mt-0.5 shrink-0" />
+            <div className="mb-4 flex items-start gap-2 border-l-2 border-accent bg-ground-tint px-3 py-2.5 text-[11px] leading-relaxed text-ink-2">
+              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-pigment" />
               <p>
                 This is a statutory action. The system supports but does not replace the decision of the
                 competent authority. A recorded reason is mandatory and will be added to the audit trail.
               </p>
             </div>
           )}
-          <p className="mb-3 text-sm text-slate-600">
-            You are about to <span className="font-semibold">{modal.label}</span> for application{' '}
-            <span className="font-semibold">{app.applicationNumber}</span>.
+          <p className="mb-4 text-[11.5px] leading-relaxed text-ink-2">
+            You are about to <span className="font-semibold text-ink">{modal.label}</span> for application{' '}
+            <span className="font-semibold text-ink">{app.applicationNumber}</span>.
           </p>
-          <Field label={modal.gated || modal.reasonRequired ? 'Reason (mandatory)' : 'Reason (optional)'}>
-            <textarea
+          <Field
+            label={modal.gated || modal.reasonRequired ? 'Reason (mandatory)' : 'Reason (optional)'}
+            hint="This text is stored verbatim in the audit trail."
+          >
+            <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              placeholder="Enter recorded reason / observations"
+              placeholder="Record observations or the basis for this decision"
             />
           </Field>
-          <div className="mt-5 flex justify-end gap-2">
-            <button onClick={() => setModal(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              disabled={submitting}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {submitting ? 'Applying…' : 'Confirm'}
-            </button>
+          <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+            <Button onClick={() => setModal(null)}>Cancel</Button>
+            <Button variant={modal.tone === 'danger' ? 'danger' : 'primary'} onClick={submit} loading={submitting}>
+              {submitting ? 'Applying' : 'Confirm'}
+            </Button>
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase text-slate-400">{label}</dt>
-      <dd className="mt-0.5 text-slate-800">{value}</dd>
     </div>
   );
 }
