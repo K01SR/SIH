@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, ArrowLeft, TrendingDown } from 'lucide-react';
 import { api, apiError } from '../api/client';
-import { Card, PageHeader, Spinner } from '../components/ui';
+import { Button, Field, PageHeader, Select, Skeleton } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { humanize } from '../utils';
 
@@ -22,10 +22,6 @@ interface SimulationResult {
 
 const REGIONS = ['NORTH', 'SOUTH', 'EAST', 'WEST', 'CENTRAL', 'NORTH_EAST'];
 
-/**
- * Simulation mode: what-if capacity planning. Projects the effect of adding
- * officers to a region on per-officer caseload and breach rate.
- */
 export function SimulationPage() {
   const navigate = useNavigate();
   const { push } = useToast();
@@ -51,94 +47,137 @@ export function SimulationPage() {
   return (
     <div>
       <PageHeader
-        title="Capacity Simulation"
-        subtitle="Project the impact of additional officers on pendency and SLA breaches"
+        eyebrow="Planning"
+        title={
+          <>
+            Capacity <em>simulation</em>
+          </>
+        }
+        subtitle="Project the impact of additional officers on pendency and SLA breaches."
         actions={
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <ArrowLeft size={16} /> Back to Dashboard
-          </button>
+          <Button icon={<ArrowLeft size={12} />} onClick={() => navigate('/dashboard')}>
+            Back to dashboard
+          </Button>
         }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <h3 className="font-semibold text-slate-800">Parameters</h3>
-          <div className="mt-4 space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Region</label>
-              <select
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              >
+        <section className="rounded-[5px] border border-line bg-panel lg:col-span-1">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <p className="label text-pigment">Inputs</p>
+            <h2 className="mt-1 text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">Parameters</h2>
+          </div>
+          <div className="space-y-5 px-5 py-5">
+            <Field label="Region">
+              <Select value={region} onChange={(e) => setRegion(e.target.value)}>
                 {REGIONS.map((r) => (
                   <option key={r} value={r}>
                     {humanize(r)}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
+
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">
-                Additional Officers: {additionalOfficers}
-              </label>
+              <div className="mb-2 flex items-baseline justify-between">
+                <label htmlFor="officers" className="label text-ink-2">
+                  Additional officers
+                </label>
+                <span className="font-mono text-[26px] font-medium leading-none tracking-[-0.04em] text-value">
+                  {String(additionalOfficers).padStart(2, '0')}
+                </span>
+              </div>
               <input
+                id="officers"
                 type="range"
                 min={0}
                 max={10}
                 value={additionalOfficers}
                 onChange={(e) => setAdditional(parseInt(e.target.value, 10))}
-                className="w-full"
+                className="w-full accent-[#ff951f]"
               />
+              <div className="mt-1 flex justify-between label-sm text-muted">
+                <span>0</span>
+                <span>10</span>
+              </div>
             </div>
-            <button
-              onClick={run}
-              disabled={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              <Play size={16} /> {loading ? 'Running…' : 'Run Simulation'}
-            </button>
-          </div>
-        </Card>
 
-        <Card className="lg:col-span-2">
+            <Button
+              variant="primary"
+              className="w-full"
+              icon={<Play size={12} />}
+              onClick={run}
+              loading={loading}
+            >
+              {loading ? 'Running' : 'Run simulation'}
+            </Button>
+
+            <p className="border-t border-gray-100 pt-4 text-[10px] leading-relaxed text-muted">
+              The model projects cases per officer and the resulting breach rate from current open
+              volume and officer count.
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-[5px] border border-line bg-panel lg:col-span-2">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <p className="label text-pigment">Projection</p>
+            <h2 className="mt-1 text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">Outcome</h2>
+          </div>
+
           {loading ? (
-            <Spinner />
+            <div className="space-y-4 p-5">
+              <Skeleton className="h-6 w-48" />
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16" />
+                ))}
+              </div>
+            </div>
           ) : !result ? (
-            <div className="flex h-full items-center justify-center py-14 text-sm text-slate-400">
-              Run the simulation to view projected outcomes.
+            <div className="flex h-[24rem] flex-col items-center justify-center px-6 text-center">
+              <p className="label text-muted">No run yet</p>
+              <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-muted">
+                Choose a region and officer count, then run the simulation to view projected
+                outcomes.
+              </p>
             </div>
           ) : (
-            <div>
-              <h3 className="font-semibold text-slate-800">
-                Projected outcome — {humanize(result.region)}
-              </h3>
-              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Metric label="Open Cases" value={result.openCases} />
-                <Metric label="Officers Now" value={result.currentOfficers} />
-                <Metric label="Officers After" value={result.officersAfter} />
-                <Metric label="Cases/Officer Now" value={result.casesPerOfficerNow} />
-                <Metric label="Cases/Officer After" value={result.casesPerOfficerAfter} />
-                <Metric label="Current Breach %" value={`${result.breachRateNow}%`} />
+            <div className="p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 pb-3">
+                <h3 className="text-[16px] font-medium leading-snug tracking-[-0.02em] text-ink">
+                  {humanize(result.region)}
+                </h3>
+                <span className="label-sm text-muted">
+                  +{result.additionalOfficers} officer(s)
+                </span>
               </div>
-              <div className="mt-5 flex items-center gap-4 rounded-lg bg-green-50 p-4">
-                <TrendingDown className="text-green-600" />
+
+              <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+                <Metric label="Open cases" value={result.openCases} />
+                <Metric label="Officers now" value={result.currentOfficers} />
+                <Metric label="Officers after" value={result.officersAfter} />
+                <Metric label="Cases / officer now" value={result.casesPerOfficerNow} />
+                <Metric label="Cases / officer after" value={result.casesPerOfficerAfter} />
+                <Metric label="Current breach" value={`${result.breachRateNow}%`} />
+              </div>
+
+              <div className="mt-6 flex items-start gap-4 border-t border-gray-100 pt-5">
+                <TrendingDown className="mt-0.5 shrink-0 text-pigment" size={18} />
                 <div>
-                  <p className="text-sm font-medium text-green-800">
-                    Projected breach rate: {result.projectedBreachRate}%
+                  <p className="label text-pigment">Projected breach rate</p>
+                  <p className="mt-1 font-mono text-[42px] font-medium leading-none tracking-[-0.06em] text-value">
+                    {result.projectedBreachRate}%
                   </p>
-                  <p className="text-xs text-green-700">
-                    A reduction of {result.projectedReductionPct}% from adding {result.additionalOfficers}{' '}
-                    officer(s) to {humanize(result.region)}.
+                  <p className="mt-2 text-[11px] leading-relaxed text-ink-2">
+                    A reduction of {result.projectedReductionPct}% from adding{' '}
+                    {result.additionalOfficers} officer(s) to {humanize(result.region)}.
                   </p>
                 </div>
               </div>
             </div>
           )}
-        </Card>
+        </section>
       </div>
     </div>
   );
@@ -146,9 +185,9 @@ export function SimulationPage() {
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-bold text-slate-900">{value}</p>
+    <div className="border-t border-gray-100 pt-3">
+      <p className="label-sm text-muted">{label}</p>
+      <p className="mt-1 font-mono text-[26px] font-medium leading-none tracking-[-0.04em] text-value">{value}</p>
     </div>
   );
 }

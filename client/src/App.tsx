@@ -8,6 +8,7 @@ import { Spinner } from './components/ui';
 import { Layout } from './layouts/Layout';
 import { LoginPage } from './pages/LoginPage';
 
+const LandingPage = lazy(() => import('./pages/LandingPage').then((m) => ({ default: m.LandingPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })));
 const ApplicationDetailPage = lazy(() => import('./pages/ApplicationDetailPage').then((m) => ({ default: m.ApplicationDetailPage })));
@@ -31,6 +32,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
         <Route
           element={
@@ -51,7 +53,7 @@ function AppRoutes() {
           <Route path="/rules" element={<RulesPage />} />
           <Route path="/simulation" element={<SimulationPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to={user ? '/dashboard' : '/'} replace />} />
       </Routes>
     </Suspense>
   );

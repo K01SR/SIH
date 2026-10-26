@@ -3,8 +3,17 @@ import { CalendarPlus, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
-import { Modal, Field } from './ApplicationsPage';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  Meter,
+  PageHeader,
+  Skeleton,
+} from '../components/ui';
+import { Modal } from '../components/Modal';
 import { formatDate, daysUntil, humanize } from '../utils';
 import type { EvcSchedule, User } from '../types';
 
@@ -30,7 +39,6 @@ export function EvcPage() {
 
   useEffect(() => {
     load();
-    // The server returns a staff-only directory; committee members are filtered below.
     api
       .get('/users')
       .then((res) => setMembers(res.data.data))
@@ -57,72 +65,121 @@ export function EvcPage() {
 
   return (
     <div>
-      <PageHeader title="EVC Scheduling" subtitle="Queue, schedule and track Expert Visit Committees with conflict detection" />
+      <PageHeader
+        eyebrow="Committee"
+        title={
+          <>
+            EVC <em>scheduling</em>
+          </>
+        }
+        subtitle="Queue, schedule and track Expert Visit Committees with conflict detection."
+      />
 
       {loading ? (
-        <Spinner />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64" />
+          ))}
+        </div>
       ) : error ? (
-        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <AlertTriangle className="text-red-500" size={32} />
-          <p className="text-sm text-slate-600">{error}</p>
-          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            Retry
-          </button>
-        </Card>
+        <EmptyState
+          icon={<AlertTriangle size={24} />}
+          message="Unable to load EVC queue"
+          hint={error}
+          action={<Button onClick={load}>Retry</Button>}
+        />
       ) : evcs.length === 0 ? (
-        <EmptyState message="No EVCs in the queue" />
+        <EmptyState
+          icon={<CalendarPlus size={24} />}
+          message="No EVCs in the queue"
+          hint="Cases routed for an expert visit will appear here."
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {evcs.map((e) => {
+          {evcs.map((e, i) => {
             const d = daysUntil(e.dueAt);
+            const overdue = d !== null && d < 0;
             return (
-              <Card key={e.id}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-slate-800">{e.application?.applicationNumber}</p>
-                    <p className="text-xs text-slate-500">{e.application?.institution?.name}</p>
+              <article
+                key={e.id}
+                className="animate-fade-up flex min-w-0 flex-col rounded-[5px] border border-line bg-panel"
+                style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[18px] font-medium leading-none tracking-[-0.04em] text-value">
+                      {e.application?.applicationNumber}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] text-muted">
+                      {e.application?.institution?.name}
+                    </p>
                   </div>
                   <Badge value={e.status} />
                 </div>
-                <div className="mt-3 space-y-1 text-xs text-slate-600">
-                  <p>Region: {humanize(e.application?.assignedRegion)}</p>
-                  <p>Scheduled: {formatDate(e.scheduledDate)}</p>
-                  <p>
-                    Due: {formatDate(e.dueAt)}{' '}
-                    {d !== null && (
-                      <span className={d < 0 ? 'font-semibold text-red-600' : 'text-slate-500'}>
-                        ({d < 0 ? `${Math.abs(d)}d overdue` : `${d}d left`})
-                      </span>
-                    )}
-                  </p>
-                  {e.venue && <p>Venue: {e.venue}</p>}
-                  {e.members && e.members.length > 0 && (
-                    <p>Members: {e.members.map((m) => m.user?.fullName).join(', ')}</p>
+
+                <dl className="flex-1 px-4 py-3 text-[10.5px]">
+                  {[
+                    ['Region', humanize(e.application?.assignedRegion)],
+                    ['Scheduled', formatDate(e.scheduledDate)],
+                    ['Venue', e.venue ?? '—'],
+                    [
+                      'Members',
+                      e.members && e.members.length > 0
+                        ? e.members.map((m) => m.user?.fullName).join(', ')
+                        : '—',
+                    ],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3 border-b border-gray-100 py-1.5 last:border-b-0">
+                      <dt className="label-sm text-muted">{label}</dt>
+                      <dd className="min-w-0 truncate text-right text-ink-2">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <div className="px-4 pb-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="label-sm text-muted">Due {formatDate(e.dueAt)}</span>
+                    <span className={`label-sm ${overdue ? 'text-pigment' : 'text-muted'}`}>
+                      {d === null ? '—' : overdue ? `${Math.abs(d)}d overdue` : `${d}d left`}
+                    </span>
+                  </div>
+                  <Meter
+                    className="mt-1.5"
+                    value={overdue ? 100 : Math.max(4, 100 - (d ?? 100) * 2)}
+                    tone={overdue ? 'pigment' : 'ink'}
+                  />
+                  {e.isBreached && (
+                    <p className="mt-2 flex items-center gap-1 label-sm text-pigment">
+                      <AlertTriangle size={10} /> Delayed — escalated
+                    </p>
                   )}
                 </div>
-                {e.isBreached && (
-                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600">
-                    <AlertTriangle size={12} /> Delayed — escalated
-                  </p>
+
+                {(canSchedule || canComplete) && (
+                  <div className="mt-auto space-y-2 border-t border-gray-100 px-4 py-3">
+                    {canSchedule && e.status !== 'COMPLETED' && (
+                      <Button
+                        variant="primary"
+                        className="w-full"
+                        icon={<CalendarPlus size={12} />}
+                        onClick={() => setScheduleFor(e)}
+                      >
+                        {e.status === 'SCHEDULED' ? 'Reschedule EVC' : 'Schedule EVC'}
+                      </Button>
+                    )}
+                    {canComplete && e.status === 'SCHEDULED' && (
+                      <Button
+                        className="w-full"
+                        icon={<CheckCircle2 size={12} />}
+                        loading={completing === e.id}
+                        onClick={() => completeEvc(e)}
+                      >
+                        {completing === e.id ? 'Completing' : 'Mark EVC Completed'}
+                      </Button>
+                    )}
+                  </div>
                 )}
-                {canSchedule && e.status !== 'COMPLETED' && (
-                  <button
-                    onClick={() => setScheduleFor(e)}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                  >
-                    <CalendarPlus size={15} /> {e.status === 'SCHEDULED' ? 'Reschedule EVC' : 'Schedule EVC'}
-                  </button>
-                )}
-                {canComplete && e.status === 'SCHEDULED' && (
-                  <button
-                    onClick={() => completeEvc(e)}
-                    disabled={completing === e.id}
-                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-green-600 bg-white px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-60"
-                  >
-                    <CheckCircle2 size={15} /> {completing === e.id ? 'Completing…' : 'Mark EVC Completed'}
-                  </button>
-                )}
-              </Card>
+              </article>
             );
           })}
         </div>
@@ -187,42 +244,57 @@ function ScheduleEvcModal({
   const committeeMembers = members.filter((m) => ['EVC_MEMBER', 'COMMITTEE_MEMBER'].includes(m.role));
 
   return (
-    <Modal title={`Schedule EVC · ${evc.application?.applicationNumber}`} onClose={onClose}>
+    <Modal
+      title={`Schedule EVC · ${evc.application?.applicationNumber}`}
+      eyebrow="Committee"
+      onClose={onClose}
+    >
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Scheduled Date">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <Field label="Scheduled date">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
         <Field label="Venue">
-          <input
+          <Input
             value={venue}
             onChange={(e) => setVenue(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             placeholder="e.g. AICTE Regional Office"
           />
         </Field>
-        <Field label="Committee Members (conflict detection enabled)">
-          <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
-            {committeeMembers.length === 0 && <p className="p-2 text-xs text-slate-400">No committee members found</p>}
+        <Field label="Committee members" hint="Conflict detection is applied on the server.">
+          <div className="max-h-44 overflow-y-auto border border-gray-200">
+            {committeeMembers.length === 0 && (
+              <p className="p-3 text-[10.5px] text-muted">No committee members found</p>
+            )}
             {committeeMembers.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
-                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} />
-                <span>{m.fullName}</span>
-                <span className="ml-auto text-xs text-slate-400">{humanize(m.role)}</span>
+              <label
+                key={m.id}
+                className="flex cursor-pointer items-center gap-2 border-b border-gray-100 px-3 py-2 text-[11px] last:border-b-0 hover:bg-white/5"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(m.id)}
+                  onChange={() => toggle(m.id)}
+                  className="accent-[#ff951f]"
+                />
+                <span className="text-ink">{m.fullName}</span>
+                <span className="ml-auto label-sm text-muted">{humanize(m.role)}</span>
               </label>
             ))}
           </div>
         </Field>
         {conflicts.map((c) => (
-          <p key={c} className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{c}</p>
+          <p key={c} className="border-l-2 border-accent bg-ground-tint px-3 py-2 text-[11px] text-pigment">
+            {c}
+          </p>
         ))}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-            {saving ? 'Saving…' : 'Schedule'}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {saving ? 'Saving' : 'Schedule'}
+          </Button>
         </div>
       </form>
     </Modal>

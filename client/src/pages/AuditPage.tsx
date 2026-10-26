@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ScrollText, AlertTriangle } from 'lucide-react';
+import { ScrollText, AlertTriangle, Search } from 'lucide-react';
 import { api, apiError } from '../api/client';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  PageHeader,
+  TableSkeleton,
+} from '../components/ui';
 import { formatDateTime, humanize } from '../utils';
 import type { AuditLog } from '../types';
 
@@ -34,64 +41,82 @@ export function AuditPage() {
 
   return (
     <div>
-      <PageHeader title="Digital Audit Trail" subtitle="Immutable record of application movement, observations, actions and decisions" />
+      <PageHeader
+        eyebrow="Trace"
+        title={
+          <>
+            Digital <em>audit trail</em>
+          </>
+        }
+        subtitle="Immutable record of application movement, observations, actions and decisions."
+      />
 
-      <Card className="mb-4">
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by action or entity type"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </Card>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="relative min-w-[240px] flex-1">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by action or entity type"
+            className="pl-9"
+            aria-label="Filter audit trail"
+          />
+        </div>
+        <p className="label-sm text-muted">
+          {String(filtered.length).padStart(3, '0')} of {String(logs.length).padStart(3, '0')} entries
+        </p>
+      </div>
 
       {loading ? (
-        <Spinner />
+        <TableSkeleton rows={9} cols={5} />
       ) : error ? (
-        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <AlertTriangle className="text-red-500" size={32} />
-          <p className="text-sm text-slate-600">{error}</p>
-          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            Retry
-          </button>
-        </Card>
+        <EmptyState
+          icon={<AlertTriangle size={24} />}
+          message="Unable to load audit trail"
+          hint={error}
+          action={<Button onClick={load}>Retry</Button>}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState message="No audit entries" />
+        <EmptyState icon={<ScrollText size={24} />} message="No audit entries" />
       ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">When</th>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Entity</th>
-                <th className="px-4 py-3">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((l) => (
-                <tr key={l.id} className="border-b border-slate-100 last:border-0">
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatDateTime(l.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">{l.user?.fullName ?? 'System'}</p>
-                    <p className="text-xs text-slate-400">{l.user ? humanize(l.user.role) : 'automated'}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                      <ScrollText size={13} className="text-slate-400" />
-                      {humanize(l.action)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge value={l.entityType} />
-                  </td>
-                  <td className="max-w-xs truncate px-4 py-3 text-xs text-slate-500">{l.details ?? '—'}</td>
+        <div className="border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-ground-tint">
+                  {['When', 'Actor', 'Action', 'Entity', 'Details'].map((h) => (
+                    <th key={h} className="label px-4 py-3 text-muted">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {filtered.map((l) => (
+                  <tr key={l.id} className="border-b border-gray-100 last:border-b-0 hover:bg-white/5">
+                    <td className="whitespace-nowrap px-4 py-3 text-[10px] text-muted">
+                      {formatDateTime(l.createdAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-[11px] text-ink">{l.user?.fullName ?? 'System'}</p>
+                      <p className="label-sm text-muted">{l.user ? humanize(l.user.role) : 'automated'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] text-ink-2">
+                        <ScrollText size={11} className="text-muted" />
+                        {humanize(l.action)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge value={l.entityType} marker={false} />
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-3 text-[10px] text-muted">{l.details ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

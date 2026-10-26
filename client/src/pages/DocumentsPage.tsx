@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ShieldCheck, Plus, Upload, Paperclip } from 'lucide-react';
+import { RefreshCw, ShieldCheck, Plus, Paperclip, FileWarning } from 'lucide-react';
 import { api, apiError, uploadFile } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
-import { Modal, Field } from './ApplicationsPage';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  FileUpload,
+  Input,
+  Meter,
+  PageHeader,
+  Select,
+  TableSkeleton,
+  Textarea,
+} from '../components/ui';
+import { Modal } from '../components/Modal';
 import { formatDate, daysUntil, humanize, fileUrl } from '../utils';
 import type { DocumentRecord } from '../types';
 
@@ -32,92 +44,217 @@ export function DocumentsPage() {
 
   const isInstitution = user?.role === 'INSTITUTION';
   const canVerify = ['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(user?.role ?? '');
+  const expiring = docs.filter((d) => d.status === 'EXPIRING_SOON').length;
+  const expired = docs.filter((d) => d.status === 'EXPIRED').length;
 
   return (
     <div>
       <PageHeader
-        title="Documents & Lease Validity"
-        subtitle="Track expiry of lease deeds and prescribed documents with advance alerts"
+        eyebrow="Validity"
+        title={
+          <>
+            Documents &amp; <em>lease validity</em>
+          </>
+        }
+        subtitle="Track expiry of lease deeds and prescribed documents with advance alerts."
         actions={
           isInstitution && (
-            <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-              <Plus size={16} /> Add Document
-            </button>
+            <Button variant="primary" icon={<Plus size={12} />} onClick={() => setShowNew(true)}>
+              Add document
+            </Button>
           )
         }
       />
 
+      {!loading && docs.length > 0 && (
+        <div className="mb-6 grid gap-6 border-b border-gray-100 pb-5 sm:grid-cols-3">
+          <div>
+            <p className="label text-muted">Tracked</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(docs.length).padStart(2, '0')}
+            </p>
+          </div>
+          <div>
+            <p className="label text-muted">Expiring soon</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(expiring).padStart(2, '0')}
+            </p>
+          </div>
+          <div>
+            <p className="label text-muted">Expired</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(expired).padStart(2, '0')}
+            </p>
+          </div>
+        </div>
+      )}
+
       {loading ? (
-        <Spinner />
+        <TableSkeleton rows={7} cols={6} />
       ) : docs.length === 0 ? (
-        <EmptyState message="No documents tracked" />
+        <EmptyState
+          icon={<FileWarning size={24} />}
+          message="No documents tracked"
+          hint="Lease deeds and prescribed documents will appear here."
+        />
       ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Document</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Institution</th>
-                <th className="px-4 py-3">Valid Until</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((d) => {
-                const days = d.daysToExpiry ?? daysUntil(d.validUntil);
-                return (
-                  <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {d.title}
-                      {d.filePath && (
-                        <a
-                          href={fileUrl(d.filePath)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          <Paperclip size={12} /> View
-                        </a>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{humanize(d.type)}</td>
-                    <td className="px-4 py-3 text-slate-600">{d.institution?.name}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${days !== null && days < 0 ? 'text-red-600' : days !== null && days <= 30 ? 'text-amber-600' : 'text-slate-500'}`}>
-                        {formatDate(d.validUntil)}
-                        {days !== null && <span className="ml-1">({days < 0 ? 'expired' : `${days}d left`})</span>}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3"><Badge value={d.status} /></td>
-                    <td className="px-4 py-3">
-                      {isInstitution && ['VALID', 'EXPIRING_SOON', 'EXPIRED'].includes(d.status) && (
-                        <button onClick={() => setRenewFor(d)} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          <RefreshCw size={12} /> Submit Renewal
-                        </button>
-                      )}
-                      {canVerify && d.status === 'RENEWAL_SUBMITTED' && (
-                        <button onClick={() => setVerifyFor(d)} className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          <ShieldCheck size={12} /> Verify Renewal
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
+        <div className="border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-ground-tint">
+                  {['Document', 'Type', 'Institution', 'Valid until', 'Status', 'Action'].map((h) => (
+                    <th key={h} className="label px-4 py-3 text-muted">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((d) => {
+                  const days = d.daysToExpiry ?? daysUntil(d.validUntil);
+                  const late = days !== null && days < 0;
+                  return (
+                    <tr key={d.id} className="border-b border-gray-100 last:border-b-0 hover:bg-white/5">
+                      <td className="px-4 py-3.5">
+                        <p className="text-[11.5px] font-medium text-ink">{d.title}</p>
+                        {d.filePath && (
+                          <a
+                            href={fileUrl(d.filePath)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="link-underline mt-0.5 inline-flex items-center gap-1 label-sm text-pigment"
+                          >
+                            <Paperclip size={10} /> View file
+                          </a>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-[10.5px] text-ink-2">{humanize(d.type)}</td>
+                      <td className="px-4 py-3.5 text-[10.5px] text-ink-2">{d.institution?.name ?? '—'}</td>
+                      <td className="w-[170px] px-4 py-3.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10.5px] text-ink-2">{formatDate(d.validUntil)}</span>
+                          <span className={`label-sm ${late ? 'text-pigment' : 'text-muted'}`}>
+                            {days === null ? '—' : late ? 'expired' : `${days}d`}
+                          </span>
+                        </div>
+                        <Meter
+                          className="mt-1.5"
+                          value={late ? 100 : Math.max(4, 100 - (days ?? 100) * 1.4)}
+                          tone={late ? 'pigment' : days !== null && days <= 30 ? 'ink' : 'muted'}
+                        />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge value={d.status} />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {isInstitution && ['VALID', 'EXPIRING_SOON', 'EXPIRED'].includes(d.status) && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={<RefreshCw size={11} />}
+                            onClick={() => setRenewFor(d)}
+                          >
+                            Submit renewal
+                          </Button>
+                        )}
+                        {canVerify && d.status === 'RENEWAL_SUBMITTED' && (
+                          <Button
+                            size="sm"
+                            icon={<ShieldCheck size={11} />}
+                            onClick={() => setVerifyFor(d)}
+                          >
+                            Verify renewal
+                          </Button>
+                        )}
+                        {!isInstitution && !canVerify && <span className="label-sm text-muted">—</span>}
+                        {isInstitution && !['VALID', 'EXPIRING_SOON', 'EXPIRED'].includes(d.status) && (
+                          <span className="label-sm text-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {renewFor && (
-        <RenewModal doc={renewFor} onClose={() => setRenewFor(null)} onSaved={() => { setRenewFor(null); push('Renewal submitted'); load(); }} />
+        <RenewModal
+          doc={renewFor}
+          onClose={() => setRenewFor(null)}
+          onSaved={() => {
+            setRenewFor(null);
+            push('Renewal submitted');
+            load();
+          }}
+        />
       )}
       {verifyFor && (
-        <VerifyRenewalModal doc={verifyFor} onClose={() => setVerifyFor(null)} onSaved={() => { setVerifyFor(null); push('Renewal verified'); load(); }} />
+        <VerifyRenewalModal
+          doc={verifyFor}
+          onClose={() => setVerifyFor(null)}
+          onSaved={() => {
+            setVerifyFor(null);
+            push('Renewal verified');
+            load();
+          }}
+        />
       )}
-      {showNew && <NewDocumentModal onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); push('Document recorded'); load(); }} />}
+      {showNew && (
+        <NewDocumentModal
+          onClose={() => setShowNew(false)}
+          onSaved={() => {
+            setShowNew(false);
+            push('Document recorded');
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DocumentSummary({ doc, mode }: { doc: DocumentRecord; mode: 'renew' | 'verify' }) {
+  const days = doc.daysToExpiry ?? daysUntil(doc.validUntil);
+  const overdue = days !== null && days < 0;
+  const dayLabel =
+    days === null
+      ? 'Not recorded'
+      : days === 0
+        ? 'Expires today'
+        : days < 0
+          ? `${Math.abs(days)} days overdue`
+          : `${days} days remaining`;
+
+  return (
+    <div className="overflow-hidden rounded-[5px] border border-line bg-ground">
+      <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+        <div className="min-w-0">
+          <p className="label text-ink-muted">Document</p>
+          <p className="mt-1.5 text-[13.5px] font-medium leading-snug tracking-[-0.01em] text-ink">{doc.title}</p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">{humanize(doc.type)}</p>
+        </div>
+        <Badge value={doc.status} />
+      </div>
+      <dl className="grid grid-cols-2 gap-px border-t border-line bg-line">
+        <div className="bg-ground px-4 py-3">
+          <dt className="label-sm text-muted">Current validity</dt>
+          <dd className="mt-1 font-mono text-[12px] text-value">{formatDate(doc.validUntil)}</dd>
+        </div>
+        <div className="bg-ground px-4 py-3">
+          <dt className="label-sm text-muted">{mode === 'verify' ? 'Renewed until' : 'Days remaining'}</dt>
+          <dd
+            className={`mt-1 font-mono text-[12px] ${
+              mode === 'verify' ? 'text-value' : overdue ? 'text-[#ff9b8d]' : 'text-value'
+            }`}
+          >
+            {mode === 'verify' ? formatDate(doc.renewedUntil) : dayLabel}
+          </dd>
+        </div>
+      </dl>
     </div>
   );
 }
@@ -129,13 +266,17 @@ function RenewModal({ doc, onClose, onSaved }: { doc: DocumentRecord; onClose: (
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [fileName, setFileName] = useState('');
+
   const handleFile = async (file?: File) => {
     if (!file) return;
+    setFileName(file.name);
     setUploading(true);
     try {
       setFilePath(await uploadFile(file));
       push('File uploaded');
     } catch (err) {
+      setFileName('');
       push(apiError(err), 'error');
     } finally {
       setUploading(false);
@@ -155,21 +296,22 @@ function RenewModal({ doc, onClose, onSaved }: { doc: DocumentRecord; onClose: (
     }
   };
   return (
-    <Modal title={`Submit Renewal · ${doc.title}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="New Validity Until">
-          <input type="date" value={renewedUntil} onChange={(e) => setRenewedUntil(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <Modal title="Submit renewal" eyebrow="Validity" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-5">
+        <DocumentSummary doc={doc} mode="renew" />
+        <Field label="New validity until" hint="Expiry date recorded on the renewed document.">
+          <Input type="date" value={renewedUntil} onChange={(e) => setRenewedUntil(e.target.value)} required />
         </Field>
-        <Field label="Renewed Document (PDF/image)">
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
-            <Upload size={14} />
-            {uploading ? 'Uploading…' : filePath ? 'File attached' : 'Choose file'}
-            <input type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-          </label>
+        <Field label="Renewed document">
+          <FileUpload fileName={fileName} uploading={uploading} onChange={handleFile} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving || uploading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Submitting…' : 'Submit Renewal'}</button>
+        <div className="flex justify-end gap-2 border-t border-line pt-4">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving || uploading}>
+            {saving ? 'Submitting' : 'Submit renewal'}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -194,20 +336,25 @@ function VerifyRenewalModal({ doc, onClose, onSaved }: { doc: DocumentRecord; on
     }
   };
   return (
-    <Modal title={`Verify Renewal · ${doc.title}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
+    <Modal title="Verify renewal" eyebrow="Review" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-5">
+        <DocumentSummary doc={doc} mode="verify" />
         <Field label="Decision">
-          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <Select value={decision} onChange={(e) => setDecision(e.target.value)}>
             <option value="APPROVED">Approved</option>
             <option value="REJECTED">Rejected</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Remarks">
-          <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={3} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Recording…' : 'Record'}</button>
+        <div className="flex justify-end gap-2 border-t border-line pt-4">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {saving ? 'Recording' : 'Record'}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -220,17 +367,20 @@ function NewDocumentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [title, setTitle] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [filePath, setFilePath] = useState('');
+  const [fileName, setFileName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    setFileName(file.name);
     setUploading(true);
     try {
       const url = await uploadFile(file);
       setFilePath(url);
       push('File uploaded');
     } catch (err) {
+      setFileName('');
       push(apiError(err), 'error');
     } finally {
       setUploading(false);
@@ -250,31 +400,35 @@ function NewDocumentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     }
   };
   return (
-    <Modal title="Add Document" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
+    <Modal title="Add document" eyebrow="Register" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-5">
         <Field label="Title">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
         </Field>
-        <Field label="Type">
-          <select value={type} onChange={(e) => setType(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            {['LEASE_DEED', 'BUILDING_APPROVAL', 'FIRE_SAFETY', 'LAND_USE', 'AFFILIATION', 'ACCREDITATION', 'OTHER'].map((t) => (
-              <option key={t} value={t}>{humanize(t)}</option>
-            ))}
-          </select>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Type">
+            <Select value={type} onChange={(e) => setType(e.target.value)}>
+              {['LEASE_DEED', 'BUILDING_APPROVAL', 'FIRE_SAFETY', 'LAND_USE', 'AFFILIATION', 'ACCREDITATION', 'OTHER'].map((t) => (
+                <option key={t} value={t}>
+                  {humanize(t)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Valid until">
+            <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} required />
+          </Field>
+        </div>
+        <Field label="Attachment">
+          <FileUpload fileName={fileName} uploading={uploading} onChange={handleFile} />
         </Field>
-        <Field label="Valid Until">
-          <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </Field>
-        <Field label="Attachment (PDF/image)">
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
-            <Upload size={14} />
-            {uploading ? 'Uploading…' : filePath ? 'File attached' : 'Choose file'}
-            <input type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-          </label>
-        </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving || uploading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
+        <div className="flex justify-end gap-2 border-t border-line pt-4">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving || uploading}>
+            {saving ? 'Saving' : 'Save'}
+          </Button>
         </div>
       </form>
     </Modal>

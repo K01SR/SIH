@@ -1,24 +1,550 @@
 @import "tailwindcss";
 
-:root {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+/* ================================================================
+   AICTE — Financial dark system
+   Navy-black ground, opaque panels, fine rules, orange actions and
+   pale-gold data. IBM Plex Sans for reading, Plex Mono for numbers.
+   ================================================================ */
+
+@theme {
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-ground: #07090e;
+  --color-ground-tint: #101522;
+  --color-panel: #10141c;
+  --color-accent: #ff951f;
+  --color-accent-hover: #ffb057;
+  --color-value: #edcd8c;
+  --color-ink: #f4f5f7;
+  --color-ink-muted: #c9ced8;
+  --color-line: #303139;
+  --color-line-soft: #23252d;
+
+  --color-bg: #07090e;
+  --color-bg-subtle: #101522;
+  --color-bg-elevated: #10141c;
+  --color-surface: #10141c;
+  --color-border: #303139;
+  --color-border-strong: #3c3e48;
+  --color-text-primary: #f4f5f7;
+  --color-text-secondary: #dfe3ea;
+  --color-text-tertiary: #c9ced8;
+  --color-accent-light: rgba(255, 149, 31, 0.1);
+  --color-success: #7bd8a6;
+  --color-warning: #edcd8c;
+  --color-danger: #ff8a7a;
+
+  /* Legacy aliases retained so older pages keep resolving */
+  --color-ground-2: #101522;
+  --color-ink-2: #dfe3ea;
+  --color-muted: #c9ced8;
+  --color-pigment: #ff951f;
+  --color-hairline: #303139;
 }
 
-* {
-  box-sizing: border-box;
+:root {
+  color-scheme: dark;
+
+  --dp-color-ground: #07090e;
+  --dp-color-ground-tint: #101522;
+  --dp-color-panel: #10141c;
+  --dp-color-accent: #ff951f;
+  --dp-color-value: #edcd8c;
+  --dp-color-ink: #f4f5f7;
+  --dp-color-ink-muted: #c9ced8;
+  --dp-color-line: #303139;
+  --dp-typography-body-face: "IBM Plex Sans", sans-serif;
+  --dp-typography-data-face: "IBM Plex Mono", monospace;
+  --dp-typography-body: 16px;
+  --dp-typography-supporting: 14px;
+  --dp-typography-metadata: 13px;
+  --dp-typography-body-leading: 1.6;
+  --dp-typography-reading-leading: 1.65;
+  --dp-spacing-cluster-gap: 24px;
+  --dp-spacing-compact-gap: 12px;
+  --dp-radius-panel: 5px;
+  --dp-radius-editorial: 4px;
+  --dp-radius-control: 40px;
+  --dp-border-hairline: 1px;
+  --dp-motion-interaction: 160ms;
+  --dp-motion-easing: ease;
+
+  --bg: #07090e;
+  --bg-subtle: #101522;
+  --bg-elevated: #10141c;
+  --surface: #10141c;
+  --ground-tint: #101522;
+  --panel: #10141c;
+  --line: #303139;
+  --line-soft: #23252d;
+  --ink-muted: #c9ced8;
+  --border: #303139;
+  --border-strong: #3c3e48;
+  --text-primary: #f4f5f7;
+  --text-secondary: #dfe3ea;
+  --text-tertiary: #c9ced8;
+  --accent: #ff951f;
+  --accent-hover: #ffb057;
+  --accent-light: rgba(255, 149, 31, 0.1);
+  --success: #7bd8a6;
+  --warning: #edcd8c;
+  --danger: #ff8a7a;
+
+  --ground: #07090e;
+  --ground-2: #101522;
+  --ink: #f4f5f7;
+  --ink-2: #dfe3ea;
+  --muted: #c9ced8;
+  --pigment: #ff951f;
+  --hairline: #303139;
+  --hairline-strong: #3c3e48;
+  --value: #edcd8c;
+
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: #f1f5f9;
-  color: #0f172a;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+h1, h2, h3, h4 {
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
 }
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+
+::selection {
+  background: var(--accent);
+  color: var(--ground);
+}
+
+/* ---------------------------------------------------------------- *
+ *  Typography
+ * ---------------------------------------------------------------- */
+.font-display {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.font-display em,
+h1 em,
+h2 em,
+.italic-pigment {
+  font-style: normal;
+  font-weight: inherit;
+  color: var(--value);
+}
+
+.mono,
+.font-mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.label-sm {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.text-balance { text-wrap: balance; }
+
+.text-pigment { color: var(--pigment); }
+.text-ink { color: var(--ink); }
+.text-ink-2 { color: var(--ink-2); }
+.text-muted { color: var(--muted); }
+.text-value { color: var(--value); }
+
+.bg-ground { background: var(--ground); }
+.bg-ground-2 { background: var(--ground-2); }
+.bg-ground-tint { background: var(--ground-tint); }
+.bg-panel { background: var(--panel); }
+.bg-ink { background: var(--ink); }
+.text-ground { color: var(--ground); }
+
+/* ---------------------------------------------------------------- *
+ *  Borders & rules
+ * ---------------------------------------------------------------- */
+.hairline { border-color: var(--hairline); }
+.hairline-strong { border-color: var(--hairline-strong); }
+.border-line { border-color: var(--line); }
+
+.rule-t { border-top: 1px solid var(--line); }
+.rule-b { border-bottom: 1px solid var(--line); }
+.rule-l { border-left: 1px solid var(--line); }
+.rule-r { border-right: 1px solid var(--line); }
+.rule-pigment { border-color: var(--pigment); }
+
+.marker::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.5rem;
+  border-radius: 1px;
+  background: var(--value);
+  vertical-align: 0.1em;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Controls
+ * ---------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius-control);
+  background: transparent;
+  color: var(--ink);
+  padding: 0.62rem 1.15rem;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--dp-motion-interaction) var(--dp-motion-easing),
+    color var(--dp-motion-interaction) var(--dp-motion-easing),
+    border-color var(--dp-motion-interaction) var(--dp-motion-easing),
+    opacity var(--dp-motion-interaction) var(--dp-motion-easing);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: rgba(244, 245, 247, 0.05);
+  border-color: var(--accent);
+  color: var(--value);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ground);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--ground);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+.btn-ghost:hover {
+  background: rgba(244, 245, 247, 0.05);
+  border-color: transparent;
+  color: var(--accent);
+}
+.btn-danger {
+  border-color: rgba(255, 138, 122, 0.4);
+  color: var(--danger);
+  background: transparent;
+}
+.btn-danger:hover {
+  background: rgba(255, 138, 122, 0.12);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-sm {
+  padding: 0.4rem 0.85rem;
+  font-size: 12px;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius-control);
+  background: var(--ground-tint);
+  color: var(--ink);
+  padding: 0.68rem 1rem;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+  transition:
+    border-color var(--dp-motion-interaction) var(--dp-motion-easing),
+    box-shadow var(--dp-motion-interaction) var(--dp-motion-easing),
+    background-color var(--dp-motion-interaction) var(--dp-motion-easing);
+}
+.input::placeholder { color: #8d94a1; }
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 149, 31, 0.16);
+  background: var(--ground-tint);
+}
+.input:disabled { opacity: 0.55; background: var(--ground); }
+
+.upload-card {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--dp-radius-panel);
+  background: var(--ground);
+  padding: 0.7rem 0.85rem;
+  transition:
+    border-color var(--dp-motion-interaction) var(--dp-motion-easing),
+    background-color var(--dp-motion-interaction) var(--dp-motion-easing);
+}
+.upload-card:hover,
+.upload-card:focus-within {
+  border-color: rgba(255, 149, 31, 0.62);
+  background: var(--ground-tint);
+}
+.upload-card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+textarea.input { border-radius: 12px; }
+
+select.input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23c9ced8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: calc(100% - 15px) center;
+  background-size: 12px 8px;
+  background-repeat: no-repeat;
+  padding-right: 2.5rem;
+}
+
+input[type="range"] { accent-color: var(--accent); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+
+/* ---------------------------------------------------------------- *
+ *  Links & focus
+ * ---------------------------------------------------------------- */
+.link-underline {
+  color: var(--ink-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition:
+    color var(--dp-motion-interaction) var(--dp-motion-easing),
+    border-color var(--dp-motion-interaction) var(--dp-motion-easing);
+}
+.link-underline:hover { color: var(--accent); border-color: var(--accent); }
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Surfaces & atmosphere
+ * ---------------------------------------------------------------- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--dp-radius-panel); }
+
+.warm-glow {
+  background:
+    radial-gradient(ellipse 70% 55% at 72% 18%, rgba(255, 149, 31, 0.19), transparent 64%),
+    radial-gradient(ellipse 48% 42% at 84% 32%, rgba(237, 205, 140, 0.11), transparent 70%);
+}
+
+.glass {
+  background: rgba(16, 20, 28, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.subject-shadow {
+  box-shadow: 0 24px 80px -32px rgba(255, 149, 31, 0.25);
+}
+
+/* ---------------------------------------------------------------- *
+ *  Motion — brief, non-decorative
+ * ---------------------------------------------------------------- */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes line-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.animate-fade-up { animation: fade-up 0.35s ease both; }
+.animate-slide-in-right { animation: slide-in-right 0.28s ease both; }
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+.animate-page { animation: page-in 0.28s ease both; }
+.animate-line { transform-origin: left; animation: line-in 0.5s ease both; }
+
+.reveal { opacity: 1; transform: none; }
+.js-reveal .reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+.js-reveal .reveal.is-visible { opacity: 1; transform: none; }
+
+/* ---------------------------------------------------------------- *
+ *  Scrollbars
+ * ---------------------------------------------------------------- */
+* { scrollbar-width: thin; scrollbar-color: #303139 transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #303139; border-radius: 1px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4d57; }
+
+/* ---------------------------------------------------------------- *
+ *  Accessibility
+ * ---------------------------------------------------------------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ================================================================
+   Dark compatibility layer
+   Existing pages use light-mode utility names. These unlayered
+   rules sit above Tailwind's utilities layer and map the old
+   palette onto the financial system without touching behaviour.
+   ================================================================ */
+
+.bg-white, .bg-white\/90, .bg-white\/95 { background-color: var(--panel); }
+.bg-gray-50 { background-color: var(--ground-tint); }
+.bg-gray-100 { background-color: rgba(244, 245, 247, 0.06); }
+.bg-gray-200 { background-color: var(--line); }
+.bg-gray-300 { background-color: #4c4f59; }
+.bg-gray-400 { background-color: #707684; }
+.bg-gray-900 { background-color: #05070b; }
+.bg-gray-900\/40 { background-color: rgba(3, 5, 9, 0.72); }
+
+.text-gray-900, .text-gray-800 { color: var(--ink); }
+.text-gray-700 { color: #dfe3ea; }
+.text-gray-600, .text-gray-500 { color: var(--ink-muted); }
+.text-gray-400 { color: #9aa1ad; }
+.text-gray-300 { color: #7e8592; }
+.text-white { color: var(--ink); }
+
+.border-gray-100, .border-gray-200, .border-gray-300 { border-color: var(--line); }
+.divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--line); }
+.ring-gray-200 { --tw-ring-color: var(--line); }
+
+.bg-blue-600, .bg-blue-700, .bg-blue-500 { background-color: var(--accent); }
+.hover\:bg-blue-700:hover { background-color: var(--accent-hover); }
+.text-blue-600, .text-blue-700 { color: var(--accent); }
+.text-blue-400, .text-blue-200, .text-blue-100 { color: var(--value); }
+.bg-blue-50 { background-color: rgba(255, 149, 31, 0.1); }
+.hover\:bg-blue-50:hover { background-color: rgba(255, 149, 31, 0.14); }
+.bg-blue-500\/15, .bg-blue-500\/20, .bg-blue-500 { background-color: rgba(255, 149, 31, 0.16); }
+.border-blue-600 { border-color: var(--accent); }
+.ring-blue-200 { --tw-ring-color: rgba(255, 149, 31, 0.35); }
+
+.bg-red-50 { background-color: rgba(255, 138, 122, 0.1); }
+.bg-red-500 { background-color: var(--danger); }
+.text-red-700, .text-red-600 { color: var(--danger); }
+.text-red-500 { color: #ff9b8d; }
+.border-red-200 { border-color: rgba(255, 138, 122, 0.32); }
+.ring-red-200 { --tw-ring-color: rgba(255, 138, 122, 0.34); }
+
+.bg-emerald-50 { background-color: rgba(123, 216, 166, 0.1); }
+.bg-emerald-500 { background-color: var(--success); }
+.text-emerald-700, .text-emerald-500 { color: var(--success); }
+.ring-emerald-200 { --tw-ring-color: rgba(123, 216, 166, 0.32); }
+
+.bg-amber-50 { background-color: rgba(237, 205, 140, 0.1); }
+.bg-amber-500 { background-color: var(--value); }
+.text-amber-700 { color: var(--value); }
+.ring-amber-200 { --tw-ring-color: rgba(237, 205, 140, 0.32); }
+
+.bg-slate-400 { background-color: #707684; }
+.bg-slate-800 { background-color: var(--ground-tint); }
+.text-slate-300 { color: var(--ink-muted); }
+.text-slate-400 { color: #8f96a3; }
+.border-white\/15 { border-color: var(--line); }
+.bg-white\/5 { background-color: rgba(244, 245, 247, 0.05); }
+
+.hover\:bg-gray-50:hover { background-color: var(--ground-tint); }
+.hover\:bg-gray-100:hover { background-color: rgba(244, 245, 247, 0.08); }
+.hover\:bg-white:hover { background-color: var(--panel); }
+.hover\:text-gray-900:hover, .hover\:text-gray-800:hover, .hover\:text-gray-700:hover { color: var(--ink); }
+.hover\:text-gray-600:hover { color: var(--ink); }
+.hover\:border-gray-300:hover { border-color: var(--accent); }
+.hover\:text-blue-600:hover { color: var(--accent); }
+.hover\:text-red-600:hover { color: var(--danger); }
+
+.focus\:bg-gray-50:focus { background-color: var(--ground-tint); }
+.focus\:ring-blue-500:focus { --tw-ring-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .js-reveal .reveal { opacity: 1; transform: none; }
 }

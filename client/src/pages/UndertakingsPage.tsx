@@ -1,10 +1,21 @@
 import { useEffect, useState } from 'react';
-import { ClipboardCheck, Upload, AlertTriangle } from 'lucide-react';
+import { ClipboardCheck, Upload, AlertTriangle, FileCheck2 } from 'lucide-react';
 import { api, apiError, uploadFile } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
-import { Modal, Field } from './ApplicationsPage';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  FileUpload,
+  Meter,
+  PageHeader,
+  Select,
+  TableSkeleton,
+  Textarea,
+} from '../components/ui';
+import { Modal } from '../components/Modal';
 import { formatDate, daysUntil, humanize, fileUrl } from '../utils';
 import type { Undertaking } from '../types';
 
@@ -33,73 +44,137 @@ export function UndertakingsPage() {
 
   const isInstitution = user?.role === 'INSTITUTION';
   const canVerify = ['REGIONAL_OFFICER', 'BUREAU_OFFICER', 'COMPETENT_AUTHORITY'].includes(user?.role ?? '');
+  const overdue = items.filter((u) => {
+    const d = daysUntil(u.dueDate);
+    return d !== null && d < 0 && u.status !== 'COMPLIANT';
+  }).length;
 
   return (
     <div>
-      <PageHeader title="Time-Bound Undertakings & Compliance" subtitle="Track conditions, due dates, evidence submission and verification" />
+      <PageHeader
+        eyebrow="Compliance"
+        title={
+          <>
+            Time-bound <em>undertakings</em>
+          </>
+        }
+        subtitle="Track conditions, due dates, evidence submission and verification."
+      />
+
+      {!loading && !error && items.length > 0 && (
+        <div className="mb-6 grid gap-6 border-b border-gray-100 pb-5 sm:grid-cols-3">
+          <div>
+            <p className="label text-muted">Undertakings</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(items.length).padStart(2, '0')}
+            </p>
+          </div>
+          <div>
+            <p className="label text-muted">Awaiting evidence</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(items.filter((u) => u.status === 'PENDING').length).padStart(2, '0')}
+            </p>
+          </div>
+          <div>
+            <p className="label text-muted">Overdue</p>
+            <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+              {String(overdue).padStart(2, '0')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
-        <Spinner />
+        <TableSkeleton rows={7} cols={5} />
       ) : error ? (
-        <Card className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <AlertTriangle className="text-red-500" size={32} />
-          <p className="text-sm text-slate-600">{error}</p>
-          <button onClick={load} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            Retry
-          </button>
-        </Card>
+        <EmptyState
+          icon={<AlertTriangle size={24} />}
+          message="Unable to load undertakings"
+          hint={error}
+          action={<Button onClick={load}>Retry</Button>}
+        />
       ) : items.length === 0 ? (
-        <EmptyState message="No undertakings recorded" />
+        <EmptyState
+          icon={<FileCheck2 size={24} />}
+          message="No undertakings recorded"
+          hint="Conditions attached to approvals will be tracked here."
+        />
       ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Undertaking</th>
-                <th className="px-4 py-3">Application</th>
-                <th className="px-4 py-3">Due Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((u) => {
-                const d = daysUntil(u.dueDate);
-                return (
-                  <tr key={u.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800">{u.title}</p>
-                      <p className="text-xs text-slate-500">{u.description}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{u.application?.applicationNumber}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${d !== null && d < 0 ? 'text-red-600' : d !== null && d <= 7 ? 'text-amber-600' : 'text-slate-500'}`}>
-                        {formatDate(u.dueDate)}
-                        {d !== null && <span className="ml-1">({d < 0 ? `${Math.abs(d)}d overdue` : `${d}d left`})</span>}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge value={u.status} />
-                      {u.escalated && <AlertTriangle size={12} className="ml-2 inline text-red-500" />}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isInstitution && ['PENDING', 'ESCALATED'].includes(u.status) && (
-                        <button onClick={() => setSubmitFor(u)} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          <Upload size={12} /> Submit Evidence
-                        </button>
-                      )}
-                      {canVerify && u.status === 'SUBMITTED' && (
-                        <button onClick={() => setVerifyFor(u)} className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white">
-                          <ClipboardCheck size={12} /> Verify
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
+        <div className="border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-ground-tint">
+                  {['Undertaking', 'Application', 'Due date', 'Status', 'Action'].map((h) => (
+                    <th key={h} className="label px-4 py-3 text-muted">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((u) => {
+                  const d = daysUntil(u.dueDate);
+                  const late = d !== null && d < 0;
+                  return (
+                    <tr key={u.id} className="border-b border-gray-100 last:border-b-0 hover:bg-white/5">
+                      <td className="max-w-[300px] px-4 py-3.5">
+                        <p className="text-[11.5px] font-medium text-ink">{u.title}</p>
+                        <p className="mt-0.5 text-[10px] leading-relaxed text-muted">{u.description}</p>
+                      </td>
+                      <td className="px-4 py-3.5 text-[10.5px] text-ink-2">
+                        {u.application?.applicationNumber}
+                      </td>
+                      <td className="w-[170px] px-4 py-3.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10.5px] text-ink-2">{formatDate(u.dueDate)}</span>
+                          <span className={`label-sm ${late ? 'text-pigment' : 'text-muted'}`}>
+                            {d === null ? '—' : late ? `${Math.abs(d)}d over` : `${d}d`}
+                          </span>
+                        </div>
+                        <Meter
+                          className="mt-1.5"
+                          value={late ? 100 : Math.max(4, 100 - (d ?? 100) * 3)}
+                          tone={late ? 'pigment' : 'ink'}
+                        />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <Badge value={u.status} />
+                          {u.escalated && <AlertTriangle size={11} className="text-pigment" />}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {isInstitution && ['PENDING', 'ESCALATED'].includes(u.status) && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={<Upload size={11} />}
+                            onClick={() => setSubmitFor(u)}
+                          >
+                            Submit evidence
+                          </Button>
+                        )}
+                        {canVerify && u.status === 'SUBMITTED' && (
+                          <Button
+                            size="sm"
+                            icon={<ClipboardCheck size={11} />}
+                            onClick={() => setVerifyFor(u)}
+                          >
+                            Verify
+                          </Button>
+                        )}
+                        {!isInstitution && !canVerify && (
+                          <span className="label-sm text-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {submitFor && (
@@ -156,22 +231,25 @@ function SubmitModal({ undertaking, onClose, onSaved }: { undertaking: Undertaki
   };
 
   return (
-    <Modal title={`Submit Evidence · ${undertaking.title}`} onClose={onClose}>
+    <Modal title={`Submit evidence · ${undertaking.title}`} eyebrow="Compliance" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Supporting Document">
-          <input
-            type="file"
+        <Field label="Supporting document">
+          <FileUpload
+            fileName={file?.name}
             accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
+            title="Choose supporting document"
+            attachedTitle="Supporting document attached"
+            hint="PDF or image · 15 MB max"
+            onChange={(f) => setFile(f ?? null)}
           />
-          <p className="mt-1 text-xs text-slate-400">PDF or image, up to 15 MB.</p>
         </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving || uploading || !file} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-            {uploading ? 'Uploading…' : saving ? 'Submitting…' : 'Submit'}
-          </button>
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving || uploading} disabled={!file}>
+            {uploading ? 'Uploading' : saving ? 'Submitting' : 'Submit'}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -198,35 +276,37 @@ function VerifyModal({ undertaking, onClose, onSaved }: { undertaking: Undertaki
   };
 
   return (
-    <Modal title={`Verify Compliance · ${undertaking.title}`} onClose={onClose}>
+    <Modal title={`Verify compliance · ${undertaking.title}`} eyebrow="Review" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         {undertaking.evidencePath && (
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <p className="rounded-[5px] border border-line bg-panel px-3 py-2 text-[10.5px] text-ink-2">
             Evidence submitted:{' '}
             <a
               href={fileUrl(undertaking.evidencePath)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-blue-600 underline"
+              className="link-underline font-mono text-pigment"
             >
               {undertaking.evidencePath}
             </a>
           </p>
         )}
         <Field label="Decision">
-          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <Select value={decision} onChange={(e) => setDecision(e.target.value)}>
             <option value="COMPLIANT">{humanize('COMPLIANT')}</option>
             <option value="NON_COMPLIANT">{humanize('NON_COMPLIANT')}</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Remarks">
-          <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={3} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-            {saving ? 'Recording…' : 'Record Verification'}
-          </button>
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {saving ? 'Recording' : 'Record verification'}
+          </Button>
         </div>
       </form>
     </Modal>

@@ -1,12 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, ArrowUpRight, SlidersHorizontal } from 'lucide-react';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Field,
+  Input,
+  PageHeader,
+  Select,
+  TableSkeleton,
+  EmptyState,
+} from '../components/ui';
+import { Modal } from '../components/Modal';
 import { formatDate, humanize, daysUntil } from '../utils';
 import type { Application, Institution } from '../types';
 import { useToast } from '../context/ToastContext';
+
+const STATUSES = [
+  'DRAFT',
+  'SUBMITTED',
+  'UNDER_SCRUTINY',
+  'RETURNED_TO_INSTITUTION',
+  'EVC_QUEUED',
+  'EVC_SCHEDULED',
+  'EVC_COMPLETED',
+  'UNDER_SAC_SHC',
+  'PENDING_DECISION',
+  'APPROVED',
+  'APPROVED_WITH_UNDERTAKING',
+  'REJECTED',
+  'WITHDRAWN',
+];
+
+function daysTone(d: number | null) {
+  if (d === null) return 'bg-gray-300';
+  if (d < 0) return 'bg-red-500';
+  if (d <= 3) return 'bg-amber-500';
+  return 'bg-emerald-500';
+}
 
 export function ApplicationsPage() {
   const { user } = useAuth();
@@ -16,6 +49,7 @@ export function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sort, setSort] = useState<'newest' | 'sla'>('newest');
   const [showNew, setShowNew] = useState(false);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
 
@@ -36,127 +70,212 @@ export function ApplicationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = apps.filter((a) => {
-    const matchesQuery =
-      !query ||
-      a.applicationNumber.toLowerCase().includes(query.toLowerCase()) ||
-      a.institution?.name.toLowerCase().includes(query.toLowerCase());
-    const matchesStatus = !statusFilter || a.status === statusFilter;
-    return matchesQuery && matchesStatus;
-  });
+  const filtered = useMemo(() => {
+    const list = apps.filter((a) => {
+      const q = query.toLowerCase();
+      const matchesQuery =
+        !query ||
+        a.applicationNumber.toLowerCase().includes(q) ||
+        a.institution?.name.toLowerCase().includes(q);
+      const matchesStatus = !statusFilter || a.status === statusFilter;
+      return matchesQuery && matchesStatus;
+    });
+    return list.sort((a, b) => {
+      if (sort === 'sla') {
+        return (daysUntil(a.slaDueAt) ?? 9999) - (daysUntil(b.slaDueAt) ?? 9999);
+      }
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+  }, [apps, query, statusFilter, sort]);
 
   const isInstitution = user?.role === 'INSTITUTION';
+  const breached = apps.filter((a) => a.isBreached).length;
+  const pending = apps.filter((a) => !['APPROVED', 'APPROVED_WITH_UNDERTAKING', 'REJECTED', 'WITHDRAWN'].includes(a.status)).length;
 
   return (
     <div>
       <PageHeader
+        eyebrow="Register"
         title="Applications"
-        subtitle={isInstitution ? 'Your applications and their current status' : 'All applications across your scope'}
+        subtitle={
+          isInstitution
+            ? 'Your applications and their current position in the approval chain.'
+            : 'Every application in your scope, ordered against its statutory SLA.'
+        }
         actions={
           isInstitution && (
-            <button
-              onClick={() => setShowNew(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              <Plus size={16} /> New Application
-            </button>
+            <Button variant="primary" icon={<Plus size={13} />} onClick={() => setShowNew(true)}>
+              New Application
+            </Button>
           )
         }
       />
 
-      <Card className="mb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by application number or institution"
-              className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
-            />
-          </div>
-          <select
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-[5px] border border-line bg-panel p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-gray-500">In register</p>
+          <p className="mt-1.5 text-[28px] font-bold leading-none tracking-tight text-gray-900">{apps.length}</p>
+        </div>
+        <div className="rounded-[5px] border border-line bg-panel p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-gray-500">In progress</p>
+          <p className="mt-1.5 text-[28px] font-bold leading-none tracking-tight text-gray-900">{pending}</p>
+        </div>
+        <div className="rounded-[5px] border border-line bg-panel p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-gray-500">SLA breached</p>
+          <p className="mt-1.5 text-[28px] font-bold leading-none tracking-tight text-red-600">{breached}</p>
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search application number or institution"
+            className="pl-9"
+            aria-label="Search applications"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={15} className="text-gray-400" />
+          <Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            aria-label="Filter by status"
+            className="min-w-[180px]"
           >
             <option value="">All statuses</option>
-            {[
-              'DRAFT',
-              'SUBMITTED',
-              'UNDER_SCRUTINY',
-              'RETURNED_TO_INSTITUTION',
-              'EVC_QUEUED',
-              'EVC_SCHEDULED',
-              'EVC_COMPLETED',
-              'UNDER_SAC_SHC',
-              'PENDING_DECISION',
-              'APPROVED',
-              'APPROVED_WITH_UNDERTAKING',
-              'REJECTED',
-              'WITHDRAWN',
-            ].map((s) => (
-              <option key={s} value={s}>{humanize(s)}</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {humanize(s)}
+              </option>
             ))}
-          </select>
+          </Select>
         </div>
-      </Card>
+        <Select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as 'newest' | 'sla')}
+          aria-label="Sort applications"
+          className="min-w-[150px]"
+        >
+          <option value="newest">Newest first</option>
+          <option value="sla">SLA due first</option>
+        </Select>
+      </div>
 
       {loading ? (
-        <Spinner />
+        <TableSkeleton rows={8} cols={6} />
       ) : filtered.length === 0 ? (
-        <EmptyState message="No applications found" />
+        <EmptyState
+          message={apps.length === 0 ? 'No applications registered' : 'No matching applications'}
+          hint={
+            apps.length === 0
+              ? ' Applications submitted by institutions will appear here.'
+              : 'Adjust the search or status filter to widen the result.'
+          }
+          action={
+            (query || statusFilter) && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('');
+                }}
+              >
+                Clear filters
+              </Button>
+            )
+          }
+        />
       ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Application</th>
-                <th className="px-4 py-3">Institution</th>
-                <th className="px-4 py-3">Region</th>
-                <th className="px-4 py-3">Stage</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">SLA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a) => {
-                const d = daysUntil(a.slaDueAt);
-                return (
-                  <tr
-                    key={a.id}
-                    onClick={() => navigate(`/applications/${a.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        navigate(`/applications/${a.id}`);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="link"
-                    aria-label={`Open application ${a.applicationNumber}`}
-                    className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 focus:bg-blue-50 focus:outline-none"
-                  >
-                    <td className="px-4 py-3 font-medium text-slate-800">{a.applicationNumber}</td>
-                    <td className="px-4 py-3 text-slate-600">{a.institution?.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{humanize(a.assignedRegion)}</td>
-                    <td className="px-4 py-3 text-slate-600">{humanize(a.currentStage)}</td>
-                    <td className="px-4 py-3">
-                      <Badge value={a.status} />
-                      {a.isBreached && <span className="ml-2 text-xs font-semibold text-red-600">BREACHED</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${d !== null && d < 0 ? 'text-red-600' : d !== null && d <= 3 ? 'text-amber-600' : 'text-slate-500'}`}>
-                        {formatDate(a.slaDueAt)}
-                        {d !== null && <span className="ml-1">({d < 0 ? `${Math.abs(d)}d over` : `${d}d left`})</span>}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
+        <div className="overflow-hidden rounded-[5px] border border-line bg-panel">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  {['Application', 'Institution', 'Stage', 'Status', 'SLA'].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-gray-500 ${i === 1 ? 'hidden md:table-cell' : ''} ${
+                        i === 2 ? 'hidden lg:table-cell' : ''
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                  <th className="w-10 px-2" aria-label="Open" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((a) => {
+                  const d = daysUntil(a.slaDueAt);
+                  const urgent = d !== null && d <= 3;
+                  return (
+                    <tr
+                      key={a.id}
+                      onClick={() => navigate(`/applications/${a.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/applications/${a.id}`);
+                        }
+                      }}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Open application ${a.applicationNumber}`}
+                      className="group cursor-pointer border-b border-gray-100 transition-colors last:border-b-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                    >
+                      <td className="px-4 py-3.5">
+                        <p className="text-[12.5px] font-semibold text-gray-900">{a.applicationNumber}</p>
+                        <p className="mt-0.5 text-[11px] text-gray-500">
+                          {humanize(a.assignedRegion)} · {humanize(a.programType)}
+                        </p>
+                      </td>
+                      <td className="hidden px-4 py-3.5 text-[12.5px] text-gray-600 md:table-cell">
+                        {a.institution?.name ?? '—'}
+                      </td>
+                      <td className="hidden px-4 py-3.5 text-[12.5px] text-gray-600 lg:table-cell">
+                        {humanize(a.currentStage)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge value={a.status} />
+                          {a.isBreached && <span className="text-[10px] font-semibold uppercase tracking-wide text-red-600">Breached</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <p className={`text-[12.5px] ${urgent ? 'font-medium text-red-600' : 'text-gray-600'}`}>
+                          {formatDate(a.slaDueAt)}
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className={`h-1.5 w-12 rounded-full ${daysTone(d)}`} />
+                          <span className="text-[10.5px] text-gray-500">
+                            {d === null
+                              ? '—'
+                              : d < 0
+                                ? `${Math.abs(d)}d overdue`
+                                : `${d}d left`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3.5">
+                        <ArrowUpRight
+                          size={14}
+                          className="text-gray-300 transition-colors group-hover:text-blue-600"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <p className="text-[11px] font-medium text-gray-500">Showing {filtered.length} of {apps.length}</p>
+            <p className="text-[11px] text-gray-400">Sorted by {sort === 'sla' ? 'SLA due' : 'recency'}</p>
+          </div>
+        </div>
       )}
 
       {showNew && (
@@ -211,91 +330,52 @@ function NewApplicationModal({
   };
 
   return (
-    <Modal title="Submit New Application" onClose={onClose}>
+    <Modal title="Submit New Application" eyebrow="Register" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         {user?.role !== 'INSTITUTION' && (
           <Field label="Institution">
-            <select
-              value={institutionId}
-              onChange={(e) => setInstitutionId(e.target.value)}
-              required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
+            <Select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)} required>
               <option value="">Select institution</option>
               {institutions.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
               ))}
-            </select>
+            </Select>
           </Field>
         )}
         <Field label="Academic Year">
-          <input value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" required />
+          <Input value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} required />
         </Field>
         <Field label="Program Type">
-          <select value={programType} onChange={(e) => setProgramType(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <Select value={programType} onChange={(e) => setProgramType(e.target.value)}>
             {['ENGINEERING', 'MANAGEMENT', 'PHARMACY', 'ARCHITECTURE', 'POLYTECHNIC', 'UNIVERSITY'].map((t) => (
-              <option key={t} value={t}>{humanize(t)}</option>
+              <option key={t} value={t}>
+                {humanize(t)}
+              </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Processing Route (per APH)">
-          <select value={routeType} onChange={(e) => setRouteType(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <Select value={routeType} onChange={(e) => setRouteType(e.target.value)}>
             <option value="SCRUTINY_EVC">Scrutiny + EVC</option>
             <option value="ONLY_SCRUTINY">Only Scrutiny</option>
             <option value="ONLY_EVC">Only EVC</option>
             <option value="EVC_SAC_SHC">EVC + SAC/SHC</option>
             <option value="SCRUTINY_SAC_SHC">Scrutiny + SAC/SHC</option>
             <option value="NEW_INSTITUTION">New Institution (full)</option>
-          </select>
+          </Select>
         </Field>
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600">
+        {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">{error}</p>}
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {saving ? 'Submitting…' : 'Submit'}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {saving ? 'Submitting' : 'Submit'}
+          </Button>
         </div>
       </form>
     </Modal>
-  );
-}
-
-export function Modal({ title, children, onClose, maxWidth = 'max-w-lg' }: { title: string; children: React.ReactNode; onClose: () => void; maxWidth?: string }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <div className={`w-full ${maxWidth} rounded-xl bg-white p-6 shadow-xl`} onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-bold text-slate-900">{title}</h3>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
-      {children}
-    </div>
   );
 }

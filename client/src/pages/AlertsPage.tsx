@@ -1,13 +1,33 @@
-import { useEffect, useState } from 'react';
-import { BellRing, ArrowUpRight, CheckCheck, Send, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BellRing, ArrowUpRight, CheckCheck, Send } from 'lucide-react';
 import { api, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge, Card, PageHeader, Spinner, EmptyState } from '../components/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  PageHeader,
+  Select,
+  Skeleton,
+  Tabs,
+  Textarea,
+} from '../components/ui';
+import { Modal } from '../components/Modal';
 import { formatDateTime, humanize } from '../utils';
 import type { Alert, Escalation } from '../types';
 
-const ROLES = ['INSTITUTION', 'REGIONAL_OFFICER', 'BUREAU_OFFICER', 'EVC_MEMBER', 'COMMITTEE_MEMBER', 'COMPETENT_AUTHORITY', 'ADMIN'];
+const ROLES = [
+  'INSTITUTION',
+  'REGIONAL_OFFICER',
+  'BUREAU_OFFICER',
+  'EVC_MEMBER',
+  'COMMITTEE_MEMBER',
+  'COMPETENT_AUTHORITY',
+  'ADMIN',
+];
 
 function BulkNotifyModal({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
   const { push } = useToast();
@@ -35,76 +55,60 @@ function BulkNotifyModal({ onClose, onSent }: { onClose: () => void; onSent: () 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">Send Bulk Notification</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Recipient Roles</label>
-            <div className="flex flex-wrap gap-2">
-              {ROLES.map((r) => (
+    <Modal title="Send bulk notification" eyebrow="Broadcast" onClose={onClose} maxWidth="max-w-xl">
+      <div className="space-y-4">
+        <Field label="Recipient roles">
+          <div className="flex flex-wrap gap-1.5">
+            {ROLES.map((r) => {
+              const active = roles.includes(r);
+              return (
                 <button
                   key={r}
+                  type="button"
                   onClick={() => toggleRole(r)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    roles.includes(r) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                  className={`label-sm border px-2 py-1 transition-colors ${
+                    active
+                      ? 'border-pigment text-pigment'
+                      : 'border-hairline text-muted hover:border-gray-300 hover:text-ink'
                   }`}
                 >
                   {humanize(r)}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Channel</label>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              <option value="IN_APP">In App</option>
-              <option value="EMAIL">Email</option>
-              <option value="SMS">SMS</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Subject</label>
-            <input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              placeholder="e.g. Deadline reminder"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Message</label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={4}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Cancel
-            </button>
-            <button
-              onClick={send}
-              disabled={sending || !subject || !body || roles.length === 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Send size={16} /> {sending ? 'Sending...' : 'Send'}
-            </button>
-          </div>
+        </Field>
+        <Field label="Channel">
+          <Select value={channel} onChange={(e) => setChannel(e.target.value)}>
+            <option value="IN_APP">In app</option>
+            <option value="EMAIL">Email</option>
+            <option value="SMS">SMS</option>
+          </Select>
+        </Field>
+        <Field label="Subject">
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="e.g. Deadline reminder"
+          />
+        </Field>
+        <Field label="Message">
+          <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} />
+        </Field>
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            icon={<Send size={12} />}
+            onClick={send}
+            loading={sending}
+            disabled={!subject || !body || roles.length === 0}
+          >
+            Send
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -115,6 +119,7 @@ export function AlertsPage() {
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'alerts' | 'escalations'>('alerts');
+  const [severity, setSeverity] = useState('');
   const [showBulk, setShowBulk] = useState(false);
 
   const load = () => {
@@ -148,113 +153,186 @@ export function AlertsPage() {
   const canSweep = ['ADMIN'].includes(user?.role ?? '');
   const canBroadcast = ['ADMIN', 'COMPETENT_AUTHORITY', 'BUREAU_OFFICER'].includes(user?.role ?? '');
 
+  const unread = alerts.filter((a) => !a.isRead).length;
+  const critical = alerts.filter((a) => a.severity === 'CRITICAL').length;
+  const visibleAlerts = useMemo(
+    () => alerts.filter((a) => !severity || a.severity === severity),
+    [alerts, severity]
+  );
+
   return (
     <div>
       {showBulk && <BulkNotifyModal onClose={() => setShowBulk(false)} onSent={load} />}
+
       <PageHeader
-        title="Alerts & Escalation"
-        subtitle="Automated alerts for SLA, EVC, undertakings and document expiry"
+        eyebrow="Signal"
+        title={
+          <>
+            Alerts &amp; <em>escalation</em>
+          </>
+        }
+        subtitle="Automated alerts for SLA, EVC, undertakings and document expiry, scoped to your role."
         actions={
-          <div className="flex gap-2">
-            {canBroadcast && (
-              <button
-                onClick={() => setShowBulk(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <Send size={16} /> Bulk Notify
-              </button>
-            )}
+          <>
             {canSweep && (
-              <button
+              <Button
                 onClick={async () => {
                   await api.post('/alerts/sweep');
                   load();
                 }}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Run Escalation Sweep
-              </button>
+                Run escalation sweep
+              </Button>
             )}
-          </div>
+            {canBroadcast && (
+              <Button variant="primary" icon={<Send size={12} />} onClick={() => setShowBulk(true)}>
+                Bulk notify
+              </Button>
+            )}
+          </>
         }
       />
 
-      <div className="mb-4 flex gap-2">
-        <button
-          onClick={() => setTab('alerts')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'alerts' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-300'}`}
-        >
-          Alerts ({alerts.length})
-        </button>
-        <button
-          onClick={() => setTab('escalations')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'escalations' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-300'}`}
-        >
-          Escalations ({escalations.length})
-        </button>
+      <div className="mb-6 grid gap-6 border-b border-gray-100 pb-5 sm:grid-cols-3">
+        <div>
+          <p className="label text-muted">Unread</p>
+          <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+            {String(unread).padStart(2, '0')}
+          </p>
+        </div>
+        <div>
+          <p className="label text-muted">Critical</p>
+          <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+            {String(critical).padStart(2, '0')}
+          </p>
+        </div>
+        <div>
+          <p className="label text-muted">Escalations</p>
+          <p className="mt-1 font-mono text-[30px] font-medium leading-none tracking-[-0.05em] text-value">
+            {String(escalations.length).padStart(2, '0')}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: 'alerts', label: 'Alerts', count: alerts.length },
+            { value: 'escalations', label: 'Escalations', count: escalations.length },
+          ]}
+          className="flex-1"
+        />
+        {tab === 'alerts' && (
+          <Select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value)}
+            aria-label="Filter alerts by severity"
+            className="w-[170px]"
+          >
+            <option value="">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="WARNING">Warning</option>
+            <option value="INFO">Info</option>
+          </Select>
+        )}
       </div>
 
       {loading ? (
-        <Spinner />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
       ) : tab === 'alerts' ? (
-        alerts.length === 0 ? (
-          <EmptyState message="No alerts" />
+        visibleAlerts.length === 0 ? (
+          <EmptyState
+            icon={<BellRing size={24} />}
+            message="No alerts"
+            hint="Automated SLA and compliance alerts will appear here."
+          />
         ) : (
-          <div className="space-y-3">
-            {alerts.map((a) => (
-              <Card key={a.id} className={`flex items-start gap-3 ${!a.isRead ? 'border-l-4 border-l-blue-500' : ''}`}>
-                <div className={`mt-0.5 rounded-lg p-2 ${a.severity === 'CRITICAL' ? 'bg-red-50 text-red-600' : a.severity === 'WARNING' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
-                  <BellRing size={18} />
+          <div className="border-t border-gray-100">
+            {visibleAlerts.map((a, i) => (
+              <div
+                key={a.id}
+                className={`animate-fade-up flex items-start gap-4 border-b border-gray-100 py-4 ${
+                  !a.isRead ? 'border-l-2 border-l-pigment pl-4' : ''
+                }`}
+                style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}
+              >
+                <div
+                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border ${
+                    a.severity === 'CRITICAL'
+                      ? 'border-pigment/60 text-pigment'
+                      : 'border-hairline text-ink-2'
+                  }`}
+                >
+                  <BellRing size={13} />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-800">{a.title}</p>
-                    <Badge value={a.severity} />
-                    <span className="text-xs text-slate-400">{humanize(a.type)}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={`text-[12px] ${a.isRead ? 'text-ink-2' : 'font-medium text-ink'}`}>
+                      {a.title}
+                    </p>
+                    <Badge value={a.severity} marker={false} />
+                    <span className="label-sm text-muted">{humanize(a.type)}</span>
                   </div>
-                  <p className="mt-1 text-sm text-slate-600">{a.message}</p>
-                  <p className="mt-1 text-xs text-slate-400">{formatDateTime(a.createdAt)}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-ink-2">{a.message}</p>
+                  <p className="mt-1.5 label-sm text-muted">{formatDateTime(a.createdAt)}</p>
                 </div>
                 {!a.isRead && (
-                  <button onClick={() => markRead(a.id)} title="Mark read" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-green-600">
-                    <CheckCheck size={16} />
+                  <button
+                    onClick={() => markRead(a.id)}
+                    title="Mark as read"
+                    aria-label="Mark alert as read"
+                    className="focus-ring shrink-0 border border-transparent p-1.5 text-muted transition-colors hover:border-gray-300 hover:text-ink"
+                  >
+                    <CheckCheck size={14} />
                   </button>
                 )}
-              </Card>
+              </div>
             ))}
           </div>
         )
       ) : escalations.length === 0 ? (
-        <EmptyState message="No escalations" />
+        <EmptyState
+          icon={<ArrowUpRight size={24} />}
+          message="No escalations"
+          hint="Cases that cross an escalation threshold will be recorded here."
+        />
       ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Entity</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Escalated To</th>
-                <th className="px-4 py-3">Level</th>
-                <th className="px-4 py-3">When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {escalations.map((e) => (
-                <tr key={e.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 font-medium text-slate-800">
-                      <ArrowUpRight size={14} className="text-red-500" /> {humanize(e.entityType)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{e.reason}</td>
-                  <td className="px-4 py-3 text-slate-600">{humanize(e.toRole)}</td>
-                  <td className="px-4 py-3 text-slate-600">L{e.level}</td>
-                  <td className="px-4 py-3 text-slate-500">{formatDateTime(e.createdAt)}</td>
+        <div className="border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-ground-tint">
+                  {['Entity', 'Reason', 'Escalated to', 'Level', 'When'].map((h) => (
+                    <th key={h} className="label px-4 py-3 text-muted">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {escalations.map((e) => (
+                  <tr key={e.id} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-4 py-3.5">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink">
+                        <ArrowUpRight size={12} className="text-pigment" /> {humanize(e.entityType)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-[11px] text-ink-2">{e.reason}</td>
+                    <td className="px-4 py-3.5 text-[11px] text-ink-2">{humanize(e.toRole)}</td>
+                    <td className="px-4 py-3.5 label-sm text-muted">L{String(e.level).padStart(2, '0')}</td>
+                    <td className="px-4 py-3.5 text-[10.5px] text-muted">{formatDateTime(e.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
